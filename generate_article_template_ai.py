@@ -668,30 +668,30 @@ SECTION: [Generate final H2 heading relevant to keyword, natural and SEO-friendl
 Neutral, authoritative wrap-up that reinforces understanding without promotion.
 ---
 RELATED_TOPIC:
-TITLE: [Generate a closely related topic title that is relevant to "{keyword}", natural, SEO-friendly, and includes keyword or related terms. Make it specific, NOT generic.]
+TITLE: [Generate a SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words) that is highly searched by users, directly related to "{keyword}", and in the format users typically search (e.g., "online dating tips", "confidence building", "first date ideas"). Focus on search intent and high search volume keywords, NOT descriptive phrases. Examples: "dating profile tips", "how to attract women", "self improvement guide"]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) that explains what this related topic covers, why it's relevant, and what value it provides. Include keyword naturally. Make it SEO-friendly and compelling.]
 ---
 RELATED_TOPIC:
-TITLE: [Generate another closely related topic title, different from previous, relevant to "{keyword}", natural and SEO-friendly]
+TITLE: [Generate another SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words), different from previous, highly searched and related to "{keyword}". Use search-friendly format like "keyword tips", "how to keyword", "keyword guide"]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) for this related topic. Include keyword naturally.]
 ---
 RELATED_TOPIC:
-TITLE: [Generate another closely related topic title, different from previous, relevant to "{keyword}", natural and SEO-friendly]
+TITLE: [Generate another SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words), different from previous, highly searched and related to "{keyword}". Use search-friendly format]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) for this related topic. Include keyword naturally.]
 ---
 RELATED_TOPIC:
-TITLE: [Generate another closely related topic title, different from previous, relevant to "{keyword}", natural and SEO-friendly]
+TITLE: [Generate another SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words), different from previous, highly searched and related to "{keyword}". Use search-friendly format]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) for this related topic. Include keyword naturally.]
 ---
 RELATED_TOPIC:
-TITLE: [Generate another closely related topic title, different from previous, relevant to "{keyword}", natural and SEO-friendly]
+TITLE: [Generate another SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words), different from previous, highly searched and related to "{keyword}". Use search-friendly format]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) for this related topic. Include keyword naturally.]
 ---
 RELATED_TOPIC:
-TITLE: [Generate another closely related topic title, different from previous, relevant to "{keyword}", natural and SEO-friendly]
+TITLE: [Generate another SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words), different from previous, highly searched and related to "{keyword}". Use search-friendly format]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) for this related topic. Include keyword naturally.]
 
-CRITICAL: You MUST generate EXACTLY 6 RELATED_TOPIC sections. Each MUST have both TITLE and DESCRIPTION. Do NOT skip any RELATED_TOPIC sections.
+CRITICAL: You MUST generate EXACTLY 6 RELATED_TOPIC sections. Each MUST have both TITLE and DESCRIPTION. Do NOT skip any RELATED_TOPIC sections. Each TITLE MUST be MINIMUM 3 words and MAXIMUM 6 words.
 ---
 
 Write comprehensive, detailed content. Target 900-1200 words total. Use this exact format, no JSON, no markdown."""
@@ -998,30 +998,30 @@ SECTION: [Generate final H2 heading relevant to keyword, natural and SEO-friendl
 Neutral, authoritative wrap-up that reinforces understanding without promotion.
 ---
 RELATED_TOPIC:
-TITLE: [Generate a closely related topic title that is relevant to "{keyword}", natural, SEO-friendly, and includes keyword or related terms. Make it specific, NOT generic.]
+TITLE: [Generate a SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words) that is highly searched by users, directly related to "{keyword}", and in the format users typically search (e.g., "online dating tips", "confidence building", "first date ideas"). Focus on search intent and high search volume keywords, NOT descriptive phrases. Examples: "dating profile tips", "how to attract women", "self improvement guide"]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) that explains what this related topic covers, why it's relevant, and what value it provides. Include keyword naturally. Make it SEO-friendly and compelling.]
 ---
 RELATED_TOPIC:
-TITLE: [Generate another closely related topic title, different from previous, relevant to "{keyword}", natural and SEO-friendly]
+TITLE: [Generate another SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words), different from previous, highly searched and related to "{keyword}". Use search-friendly format like "keyword tips", "how to keyword", "keyword guide"]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) for this related topic. Include keyword naturally.]
 ---
 RELATED_TOPIC:
-TITLE: [Generate another closely related topic title, different from previous, relevant to "{keyword}", natural and SEO-friendly]
+TITLE: [Generate another SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words), different from previous, highly searched and related to "{keyword}". Use search-friendly format]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) for this related topic. Include keyword naturally.]
 ---
 RELATED_TOPIC:
-TITLE: [Generate another closely related topic title, different from previous, relevant to "{keyword}", natural and SEO-friendly]
+TITLE: [Generate another SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words), different from previous, highly searched and related to "{keyword}". Use search-friendly format]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) for this related topic. Include keyword naturally.]
 ---
 RELATED_TOPIC:
-TITLE: [Generate another closely related topic title, different from previous, relevant to "{keyword}", natural and SEO-friendly]
+TITLE: [Generate another SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words), different from previous, highly searched and related to "{keyword}". Use search-friendly format]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) for this related topic. Include keyword naturally.]
 ---
 RELATED_TOPIC:
-TITLE: [Generate another closely related topic title, different from previous, relevant to "{keyword}", natural and SEO-friendly]
+TITLE: [Generate another SHORT keyword (MINIMUM 3 words, MAXIMUM 6 words), different from previous, highly searched and related to "{keyword}". Use search-friendly format]
 DESCRIPTION: [Generate a natural, engaging description (40-60 words) for this related topic. Include keyword naturally.]
 
-CRITICAL: You MUST generate EXACTLY 6 RELATED_TOPIC sections. Each MUST have both TITLE and DESCRIPTION. Do NOT skip any RELATED_TOPIC sections.
+CRITICAL: You MUST generate EXACTLY 6 RELATED_TOPIC sections. Each MUST have both TITLE and DESCRIPTION. Do NOT skip any RELATED_TOPIC sections. Each TITLE MUST be MINIMUM 3 words and MAXIMUM 6 words.
 ---
 
 Write comprehensive, detailed content. Target 900-1200 words total. Use this exact format, no JSON, no markdown."""
