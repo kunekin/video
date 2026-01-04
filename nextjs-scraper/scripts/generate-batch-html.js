@@ -2,8 +2,36 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+// Load environment variables from .env file if exists
+try {
+  require('dotenv').config({ path: path.join(__dirname, '../.env') });
+} catch (e) {
+  // dotenv not installed or .env not found, continue without it
+}
+
 // Import functions from generate-dynamic-html.js
 const generateDynamicScriptPath = path.join(__dirname, 'generate-dynamic-html.js');
+
+// Configuration
+const CONFIG = {
+  maxWorkers: 1, // Default: sequential processing (safe for process spawning)
+};
+
+// Get maxWorkers from environment variable or use CONFIG default
+function getMaxWorkers() {
+  const envWorkers = process.env.MAX_WORKERS;
+  if (envWorkers) {
+    const parsed = parseInt(envWorkers, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      // Validate: min 1, max 10 (lower than CSV variations due to process spawning overhead)
+      return Math.max(1, Math.min(parsed, 10));
+    }
+  }
+  return CONFIG.maxWorkers;
+}
+
+// Get validated maxWorkers
+const MAX_WORKERS = getMaxWorkers();
 
 // We'll use a simpler approach: call the main script for each keyword
 // This way we can reuse all the logic
@@ -63,16 +91,17 @@ async function processBatchFromFile(keywordsFilePath) {
     process.exit(1);
   }
   
-  console.log(`✅ Found ${keywords.length} keywords to process\n`);
+  console.log(`✅ Found ${keywords.length} keywords to process`);
+  console.log(`⚙️  Workers: ${MAX_WORKERS} ${MAX_WORKERS > 1 ? '(parallel)' : '(sequential)'}\n`);
   
   // Process each keyword
   let successCount = 0;
   let failCount = 0;
   const failedKeywords = [];
   
-  for (let i = 0; i < keywords.length; i++) {
-    const keyword = keywords[i];
-    const progress = `[${i + 1}/${keywords.length}]`;
+  // Promisified execSync wrapper for parallel processing
+  const processKeyword = async (keyword, index) => {
+    const progress = `[${index + 1}/${keywords.length}]`;
     
     console.log(`\n${'='.repeat(80)}`);
     console.log(`${progress} Processing: "${keyword}"`);
@@ -85,13 +114,70 @@ async function processBatchFromFile(keywordsFilePath) {
         cwd: path.join(__dirname, '..')
       });
       
-      successCount++;
       console.log(`✅ ${progress} Successfully processed: "${keyword}"`);
+      return { success: true, keyword, index };
     } catch (error) {
-      failCount++;
-      failedKeywords.push(keyword);
       console.error(`❌ ${progress} Failed to process: "${keyword}"`);
       console.error(`   Error: ${error.message}`);
+      return { success: false, keyword, index, error: error.message };
+    }
+  };
+  
+  if (MAX_WORKERS > 1) {
+    // Parallel processing with worker limit
+    const processKeywordPromises = [];
+    const activeWorkers = [];
+    let keywordIndex = 0;
+    
+    while (keywordIndex < keywords.length || activeWorkers.length > 0) {
+      // Start new workers up to limit
+      while (activeWorkers.length < MAX_WORKERS && keywordIndex < keywords.length) {
+        const keyword = keywords[keywordIndex];
+        const index = keywordIndex;
+        keywordIndex++;
+        
+        const worker = processKeyword(keyword, index).then(result => {
+          // Remove from active workers when done
+          const workerIndex = activeWorkers.indexOf(worker);
+          if (workerIndex > -1) {
+            activeWorkers.splice(workerIndex, 1);
+          }
+          
+          // Update counters
+          if (result.success) {
+            successCount++;
+          } else {
+            failCount++;
+            failedKeywords.push(result.keyword);
+          }
+          
+          return result;
+        });
+        
+        activeWorkers.push(worker);
+        processKeywordPromises.push(worker);
+      }
+      
+      // Wait for at least one worker to complete
+      if (activeWorkers.length > 0) {
+        await Promise.race(activeWorkers);
+      }
+    }
+    
+    // Wait for all remaining workers to complete
+    await Promise.all(activeWorkers);
+  } else {
+    // Sequential processing (original logic)
+    for (let i = 0; i < keywords.length; i++) {
+      const keyword = keywords[i];
+      const result = await processKeyword(keyword, i);
+      
+      if (result.success) {
+        successCount++;
+      } else {
+        failCount++;
+        failedKeywords.push(result.keyword);
+      }
     }
   }
   
