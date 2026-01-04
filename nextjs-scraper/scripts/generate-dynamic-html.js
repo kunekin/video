@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { execSync } = require('child_process');
+const crypto = require('crypto');
 
 // Function to extract chunks from Next.js build output
 function extractChunksFromBuild() {
@@ -137,6 +138,64 @@ function extractVideoId($) {
     return encryptedId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0).toString().substring(0, 5);
   }
   return '25212'; // Fallback
+}
+
+// Generate unique file ID (16 characters alphanumeric) from slug
+// Always unique even for same slug by adding timestamp
+function generateUniqueFileId(slug) {
+  if (!slug) {
+    // Fallback: generate random ID
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 16; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+  // Add timestamp to ensure uniqueness even for same slug
+  const timestamp = Date.now();
+  const inputString = `${slug}_${timestamp}`;
+  // Create hash from slug + timestamp and convert to uppercase alphanumeric
+  const hash = crypto.createHash('md5').update(inputString).digest('hex');
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 16; i++) {
+    const index = parseInt(hash.substr(i * 2, 2), 16) % chars.length;
+    result += chars[index];
+  }
+  return result;
+}
+
+// Generate unique image filename (16 digits + .jpg) from original URL
+// Always unique even for same URL by adding timestamp
+function generateUniqueImageFilename(originalUrl) {
+  if (!originalUrl) {
+    // Fallback: generate random number
+    const random = Math.floor(Math.random() * 10000000000000000);
+    return `${String(random).padStart(16, '0')}.jpg`;
+  }
+  // Add timestamp to ensure uniqueness even for same URL
+  const timestamp = Date.now();
+  const inputString = `${originalUrl}_${timestamp}`;
+  // Create hash from URL + timestamp and convert to 16-digit number
+  const hash = crypto.createHash('md5').update(inputString).digest('hex');
+  // Take first 15 hex characters and convert to number, then pad to 16 digits
+  const numberStr = parseInt(hash.substr(0, 15), 16).toString();
+  // Ensure 16 digits by padding or truncating
+  let result = numberStr.padStart(16, '0');
+  if (result.length > 16) {
+    result = result.substr(0, 16);
+  }
+  return `${result}.jpg`;
+}
+
+// Replace image URL with sylheter-ogrogoti.com format
+function replaceImageUrl(originalUrl, fileId) {
+  if (!originalUrl || !fileId) {
+    return originalUrl || '';
+  }
+  const filename = generateUniqueImageFilename(originalUrl);
+  return `https://sylheter-ogrogoti.com/images/${fileId}/${filename}`;
 }
 
 // Generate document_slide_details array
@@ -338,7 +397,7 @@ function buildVideoObject(videoData, index = 0) {
   return videoObject;
 }
 
-async function scrapeContent(url) {
+async function scrapeContent(url, slug = null) {
   try {
     const response = await axios.get(url, {
       headers: {
@@ -348,6 +407,9 @@ async function scrapeContent(url) {
 
     const $ = cheerio.load(response.data);
     const html = response.data;
+
+    // Generate unique file ID for this HTML file
+    const fileId = generateUniqueFileId(slug || url);
 
     const title = $('h1.videotitletext').text().trim() || $('title').text().trim();
     const description = $('div.videocontenttext.videosum p').text().trim() || 
@@ -361,7 +423,9 @@ async function scrapeContent(url) {
     const year = now.getFullYear();
     const dateText = `${month} ${day}, ${year}`;
     const videoUrl = $('div.homevideodiv iframe').attr('src') || '';
-    const thumbnailUrl = $('meta[property="og:image"]').attr('content') || '';
+    const originalThumbnailUrl = $('meta[property="og:image"]').attr('content') || '';
+    // Replace thumbnail URL with unique format
+    const thumbnailUrl = replaceImageUrl(originalThumbnailUrl, fileId);
     const keywords = $('meta[name="keywords"]').attr('content') || '';
     const author = $('meta[name="author"]').attr('content') || '';
     
@@ -386,7 +450,9 @@ async function scrapeContent(url) {
     const relatedVideos = [];
     $('.morecontentdiv a.multimediaredirect').each((i, el) => {
       const link = $(el).attr('href');
-      const img = $(el).find('img.rec-size').attr('src');
+      const originalImg = $(el).find('img.rec-size').attr('src');
+      // Replace image URL with unique format
+      const img = replaceImageUrl(originalImg, fileId);
       const alt = $(el).find('img.rec-size').attr('alt');
       const videoTitle = $(el).find('p.morevideotitle').text().trim();
       const duration = $(el).find('.tagbottom').text().trim().replace('Video', '').trim();
@@ -1985,7 +2051,7 @@ async function main() {
   console.log(`Using slug: ${slug}`);
   
   try {
-    const data = await scrapeContent(url);
+    const data = await scrapeContent(url, slug);
     
     // Use scraped chunks if available, otherwise try to extract from build
     let chunks = { css: [], js: [], polyfills: null, webpack: null };
