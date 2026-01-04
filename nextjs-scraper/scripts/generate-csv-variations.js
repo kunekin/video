@@ -21,8 +21,8 @@ const openai = new OpenAI({
 
 // Configuration
 const CONFIG = {
-  keywordsPerCall: 10, // Number of keywords per API call
-  variationsPerKeyword: 50, // Number of variations to generate per keyword
+  keywordsPerCall: 5, // Number of keywords per API call (reduced for better JSON reliability)
+  variationsPerKeyword: 20, // Number of variations to generate per keyword (reduced for better JSON reliability)
   batchSize: 100, // Save checkpoint every N keywords
   maxWorkers: 5, // Number of parallel API calls
   rateLimitDelay: 100, // Delay between API calls (ms) to respect rate limits
@@ -70,8 +70,8 @@ Each variation must be unique but related to its keyword. Focus on SEO optimizat
     try {
       const response = await openai.chat.completions.create({
         model: aiPrompts.contentGeneration.model || 'gpt-4o-mini',
-        temperature: aiPrompts.contentGeneration.temperature || 0.7,
-        max_tokens: aiPrompts.contentGeneration.max_tokens || 4000,
+        temperature: 0.5, // Lower temperature for more consistent JSON output
+        max_tokens: 8000, // Increased for more variations
         messages: [
           {
             role: 'system',
