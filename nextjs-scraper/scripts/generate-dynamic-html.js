@@ -311,6 +311,41 @@ function sanitizeKeywordForFilename(keyword) {
     .replace(/^-|-$/g, '');          // Remove leading/trailing dash
 }
 
+// Sanitize title for URL/filename slug (remove ID, sanitize, truncate to 60 chars)
+function sanitizeTitleForSlug(title, fallbackKeyword = null) {
+  if (!title) {
+    // Fallback to keyword if title not available
+    if (fallbackKeyword) {
+      return sanitizeKeywordForFilename(fallbackKeyword);
+    }
+    return 'default';
+  }
+  
+  // Remove title ID pattern: "Title [ABCDE]" → "Title"
+  let cleanTitle = title.replace(/\s*\[[A-Z0-9]{5}\]\s*$/, '').trim();
+  
+  // Sanitize: lowercase, remove special chars, replace spaces with hyphens
+  let slug = cleanTitle
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')  // Remove special characters
+    .replace(/\s+/g, '-')           // Replace spaces with dash
+    .replace(/-+/g, '-')             // Replace multiple dashes with single dash
+    .replace(/^-|-$/g, '');          // Remove leading/trailing dash
+  
+  // Truncate to 60 chars at word boundary
+  if (slug.length > 60) {
+    slug = slug.substring(0, 60);
+    // Find last hyphen (word boundary) before 60 chars
+    const lastHyphen = slug.lastIndexOf('-');
+    if (lastHyphen > 40) {  // Only truncate at hyphen if it's not too short
+      slug = slug.substring(0, lastHyphen);
+    }
+  }
+  
+  return slug || (fallbackKeyword ? sanitizeKeywordForFilename(fallbackKeyword) : 'default');
+}
+
 // Load all keywords from CSV/XLSX file into memory
 async function loadKeywordsFromFile(filePath) {
   const keywordsMap = new Map();
@@ -2525,15 +2560,8 @@ async function main() {
   
   // If input is provided, treat it as keyword; otherwise use default
   const keyword = input || 'default-content';
-  const outputSlug = sanitizeKeywordForFilename(keyword);
-  
-  // Generate short ID (5 chars) for filename and URL
-  const fileId = generateUniqueFileId(keyword);
-  const shortId = fileId.substring(0, 5).toLowerCase();
-  const slugWithId = `${outputSlug}-${shortId}`;
   
   console.log(`📝 Keyword: ${keyword}`);
-  console.log(`📁 Output filename: ${slugWithId}.html`);
   console.log(`🔗 Scraping structure from: ${baseUrl}`);
   
   try {
@@ -2593,13 +2621,24 @@ async function main() {
     }
     
     // Scrape structure from fixed URL (content will be overridden by CSV/AI content)
-    const data = await scrapeContent(baseUrl, outputSlug, content);
+    const data = await scrapeContent(baseUrl, keyword, content);
     
     // Generate unique title ID (5 chars, uppercase, different from file ID)
     const titleId = generateUniqueTitleId(keyword);
     
     // Append title ID to title in format: "Title [ABCDE]"
     data.title = `${data.title} [${titleId}]`;
+    
+    // Generate slug from title (for filename and URL consistency)
+    // Remove title ID before sanitizing, fallback to keyword if title not available
+    const titleSlug = sanitizeTitleForSlug(data.title, keyword);
+    
+    // Generate short ID (5 chars) for filename and URL
+    const fileId = generateUniqueFileId(keyword);
+    const shortId = fileId.substring(0, 5).toLowerCase();
+    const slugWithId = `${titleSlug}-${shortId}`;
+    
+    console.log(`📁 Output filename: ${slugWithId}.html`);
     
     // Use scraped chunks if available, otherwise try to extract from build
     let chunks = { css: [], js: [], polyfills: null, webpack: null };
