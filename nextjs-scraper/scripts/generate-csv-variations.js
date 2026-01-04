@@ -28,6 +28,57 @@ const CONFIG = {
   rateLimitDelay: 100, // Delay between API calls (ms) to respect rate limits
 };
 
+// Extract keywords from title, meta description, and paragraph content
+// Returns comma-separated 2-word phrases (bigrams)
+function extractKeywords(title, metaDescription, paragraphContent) {
+  // Combine all text
+  const combinedText = `${title} ${metaDescription} ${paragraphContent}`.toLowerCase();
+  
+  // Remove punctuation and split into words
+  const words = combinedText
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length >= 3); // Remove short words (< 3 chars)
+  
+  // Common stop words (English + Indonesian)
+  const stopWords = new Set([
+    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+    'of', 'with', 'by', 'from', 'as', 'is', 'are', 'was', 'were', 'been',
+    'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+    'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that',
+    'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they',
+    'di', 'ke', 'dari', 'dengan', 'untuk', 'pada', 'dalam', 'adalah',
+    'yang', 'ini', 'itu', 'dan', 'atau', 'tetapi', 'serta', 'juga',
+    'akan', 'sudah', 'belum', 'telah', 'pernah', 'tidak', 'bukan'
+  ]);
+  
+  // Extract 2-word phrases (bigrams)
+  const phrases = [];
+  for (let i = 0; i < words.length - 1; i++) {
+    const word1 = words[i];
+    const word2 = words[i + 1];
+    
+    // Skip if either word is a stop word
+    if (!stopWords.has(word1) && !stopWords.has(word2)) {
+      phrases.push(`${word1} ${word2}`);
+    }
+  }
+  
+  // Count phrase frequency
+  const phraseCount = {};
+  phrases.forEach(phrase => {
+    phraseCount[phrase] = (phraseCount[phrase] || 0) + 1;
+  });
+  
+  // Sort by frequency and get top 5-10 phrases
+  const sortedPhrases = Object.entries(phraseCount)
+    .sort((a, b) => b[1] - a[1]) // Sort by frequency (descending)
+    .slice(0, 10) // Top 10 phrases
+    .map(entry => entry[0]); // Extract phrase text
+  
+  return sortedPhrases.join(', ');
+}
+
 // Generate variations for multiple keywords in one API call
 async function generateVariationsBatch(keywords, retries = 3) {
   const prompt = `Generate ${CONFIG.variationsPerKeyword} SEO-optimized content variations for each of the following keywords: ${keywords.join(', ')}
@@ -36,7 +87,6 @@ For each keyword, generate ${CONFIG.variationsPerKeyword} unique variations. Eac
 1. TITLE (60-70 characters, SEO-optimized, unique per variation)
 2. META DESCRIPTION (155-160 characters, for search engine results)
 3. PARAGRAPH CONTENT (250-350 characters, for visible content)
-4. KEYWORDS (5-10 keywords, comma-separated)
 
 Return ONLY a valid JSON object with this structure:
 {
@@ -164,13 +214,21 @@ function saveVariationsToCSV(variations, outputPath) {
   for (const result of variations) {
     for (let i = 0; i < result.variations.length; i++) {
       const variation = result.variations[i];
+      
+      // Extract keywords from title, meta_description, and paragraph_content
+      const extractedKeywords = extractKeywords(
+        variation.title || '',
+        variation.meta_description || '',
+        variation.paragraph_content || ''
+      );
+      
       const row = [
         `"${result.keyword}"`,
         i + 1,
-        `"${variation.title.replace(/"/g, '""')}"`,
-        `"${variation.meta_description.replace(/"/g, '""')}"`,
-        `"${variation.paragraph_content.replace(/"/g, '""')}"`,
-        `"${variation.keywords.replace(/"/g, '""')}"`,
+        `"${(variation.title || '').replace(/"/g, '""')}"`,
+        `"${(variation.meta_description || '').replace(/"/g, '""')}"`,
+        `"${(variation.paragraph_content || '').replace(/"/g, '""')}"`,
+        `"${extractedKeywords.replace(/"/g, '""')}"`,
       ];
       writeStream.write(row.join(',') + '\n');
     }
