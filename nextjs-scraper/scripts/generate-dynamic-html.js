@@ -2126,14 +2126,11 @@ function generateHydrationScripts(data, slug, chunks, originalUrl = null) {
     console.warn('⚠️  Config file not found, using defaults');
   }
   
-  const siteroot = siteConfig.siteConfig?.siteroot || 'https://www.packaginginsights.com';
-  const videoPath = siteConfig.siteConfig?.videoPath || '/video';
-  const url = `${siteroot}${videoPath}/${slug}.html`;
-  
-  // Use slug with ID for URL (not original URL)
-  // This ensures URL matches the filename with ID
-  const canonicalUrl = url; // Use slug-based URL with ID
-  const ogUrl = url; // Use slug-based URL with ID
+  // Use originalUrl for ALL URLs (canonical, OG, and Next.js scripts)
+  // Filename can be title-based, but URL should remain original
+  const canonicalUrl = originalUrl;
+  const ogUrl = originalUrl;
+  const url = originalUrl; // Use original URL for Next.js scripts too
   
   // Escape URLs for use in JSON/script contexts
   const escapedCanonicalUrl = canonicalUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -2288,14 +2285,11 @@ function generateHTML(data, slug, chunks, originalUrl = null) {
     console.warn('⚠️  Config file not found, using defaults');
   }
   
-  const siteroot = siteConfig.siteConfig?.siteroot || 'https://www.packaginginsights.com';
-  const videoPath = siteConfig.siteConfig?.videoPath || '/video';
-  const url = `${siteroot}${videoPath}/${slug}.html`;
-  
-  // Use slug with ID for URL (not original URL)
-  // This ensures URL matches the filename with ID
-  const canonicalUrl = url; // Use slug-based URL with ID
-  const ogUrl = url; // Use slug-based URL with ID
+  // Use originalUrl for ALL URLs (canonical, OG, and Next.js scripts)
+  // Filename can be title-based, but URL should remain original
+  const canonicalUrl = originalUrl;
+  const ogUrl = originalUrl;
+  const url = originalUrl; // Use original URL for Next.js scripts too
   
   // Escape URLs for use in JSON/script contexts
   const escapedCanonicalUrl = canonicalUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
