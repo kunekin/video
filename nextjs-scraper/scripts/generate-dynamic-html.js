@@ -2128,6 +2128,7 @@ function generateHydrationScripts(data, slug, chunks, originalUrl = null) {
   
   // Use originalUrl for ALL URLs (canonical, OG, and Next.js scripts)
   // Filename can be title-based, but URL should remain original
+  const siteroot = siteConfig.siteConfig?.siteroot || 'https://www.packaginginsights.com';
   const canonicalUrl = originalUrl;
   const ogUrl = originalUrl;
   const url = originalUrl; // Use original URL for Next.js scripts too
@@ -2287,6 +2288,7 @@ function generateHTML(data, slug, chunks, originalUrl = null) {
   
   // Use originalUrl for ALL URLs (canonical, OG, and Next.js scripts)
   // Filename can be title-based, but URL should remain original
+  const siteroot = siteConfig.siteConfig?.siteroot || 'https://www.packaginginsights.com';
   const canonicalUrl = originalUrl;
   const ogUrl = originalUrl;
   const url = originalUrl; // Use original URL for Next.js scripts too
