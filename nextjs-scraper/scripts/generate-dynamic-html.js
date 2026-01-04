@@ -2457,18 +2457,24 @@ async function main() {
     let keywordsMap = new Map();
     let keywordsFilePath = null;
     
-    // Try CSV file first
+    // Try variations CSV first (if exists), then regular CSV/XLSX
+    const variationsCsvPath = path.join(configDir, 'keywords-variations.csv');
     const csvPath = path.join(configDir, 'keywords.csv');
-    if (fs.existsSync(csvPath)) {
+    const xlsxPath = path.join(configDir, 'keywords.xlsx');
+    
+    let useVariations = false;
+    
+    if (fs.existsSync(variationsCsvPath)) {
+      keywordsFilePath = variationsCsvPath;
+      keywordsMap = await loadKeywordsFromFile(variationsCsvPath);
+      useVariations = true;
+      console.log(`📋 Loaded variations CSV: ${variationsCsvPath}`);
+    } else if (fs.existsSync(csvPath)) {
       keywordsFilePath = csvPath;
       keywordsMap = await loadKeywordsFromFile(csvPath);
-    } else {
-      // Try XLSX file if CSV doesn't exist
-      const xlsxPath = path.join(configDir, 'keywords.xlsx');
-      if (fs.existsSync(xlsxPath)) {
-        keywordsFilePath = xlsxPath;
-        keywordsMap = await loadKeywordsFromFile(xlsxPath);
-      }
+    } else if (fs.existsSync(xlsxPath)) {
+      keywordsFilePath = xlsxPath;
+      keywordsMap = await loadKeywordsFromFile(xlsxPath);
     }
     
     let content = null;
@@ -2476,8 +2482,9 @@ async function main() {
     // Try to get content from CSV/XLSX file first
     if (keywordsMap && keywordsMap.size > 0) {
       const fileType = keywordsFilePath?.endsWith('.xlsx') || keywordsFilePath?.endsWith('.xls') ? 'XLSX' : 'CSV';
-      console.log(`📋 Loaded ${keywordsMap.size} keywords from ${fileType} file`);
-      content = await getContentFromFile(keyword, keywordsMap);
+      const variationText = useVariations ? ' (with variations)' : '';
+      console.log(`📋 Loaded ${keywordsMap.size} keywords from ${fileType} file${variationText}`);
+      content = await getContentFromFile(keyword, keywordsMap, useVariations);
       
       if (content) {
         console.log('✅ Found content in CSV/XLSX file');

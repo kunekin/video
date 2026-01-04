@@ -10,6 +10,7 @@
     "build-html": "node scripts/build-html.js",
     "generate-dynamic": "node scripts/generate-dynamic-html.js",
     "generate-batch": "node scripts/generate-batch-html.js",
+    "generate-csv-variations": "node scripts/generate-csv-variations.js",
     "build:dual": "node scripts/build-dual-version.js"
   },
   "dependencies": {
