@@ -23,8 +23,8 @@ function getMaxWorkers() {
   if (envWorkers) {
     const parsed = parseInt(envWorkers, 10);
     if (!isNaN(parsed) && parsed > 0) {
-      // Validate: min 1, max 10 (lower than CSV variations due to process spawning overhead)
-      return Math.max(1, Math.min(parsed, 10));
+      // Validate: min 1, max 100
+      return Math.max(1, Math.min(parsed, 100));
     }
   }
   return CONFIG.maxWorkers;

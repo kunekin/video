@@ -34,8 +34,8 @@ function getMaxWorkers() {
   if (envWorkers) {
     const parsed = parseInt(envWorkers, 10);
     if (!isNaN(parsed) && parsed > 0) {
-      // Validate: min 1, max 20 (safe limit)
-      return Math.max(1, Math.min(parsed, 20));
+      // Validate: min 1, max 100
+      return Math.max(1, Math.min(parsed, 100));
     }
   }
   return CONFIG.maxWorkers;
