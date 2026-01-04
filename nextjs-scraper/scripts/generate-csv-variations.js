@@ -149,7 +149,7 @@ async function loadKeywordsFromFile(keywordsFilePath) {
 
 // Save variations to CSV
 function saveVariationsToCSV(variations, outputPath) {
-  const headers = ['keyword', 'variation_id', 'title', 'meta_description', 'og_description', 'twitter_description', 'paragraph_content', 'keywords'];
+  const headers = ['keyword', 'variation_id', 'title', 'meta_description', 'paragraph_content', 'keywords'];
   
   // Check if file exists to append or create new
   const fileExists = fs.existsSync(outputPath);
@@ -169,8 +169,6 @@ function saveVariationsToCSV(variations, outputPath) {
         i + 1,
         `"${variation.title.replace(/"/g, '""')}"`,
         `"${variation.meta_description.replace(/"/g, '""')}"`,
-        `"${variation.og_description.replace(/"/g, '""')}"`,
-        `"${variation.twitter_description.replace(/"/g, '""')}"`,
         `"${variation.paragraph_content.replace(/"/g, '""')}"`,
         `"${variation.keywords.replace(/"/g, '""')}"`,
       ];
