@@ -83,6 +83,7 @@ Each variation must be unique but related to its keyword. Focus on SEO optimizat
           },
         ],
         response_format: { type: 'json_object' },
+        temperature: 0.7, // Slightly lower temperature for more consistent JSON
       });
 
       const content = response.choices[0].message.content;
