@@ -4,6 +4,9 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const { execSync } = require('child_process');
 const crypto = require('crypto');
+const OpenAI = require('openai');
+const csv = require('csv-parser');
+const XLSX = require('xlsx');
 
 // Function to extract chunks from Next.js build output
 function extractChunksFromBuild() {
@@ -166,6 +169,38 @@ function generateUniqueFileId(slug) {
   return result;
 }
 
+// Generate unique title ID (5 characters uppercase alphanumeric) from keyword
+// Always unique even for same keyword by adding timestamp
+// Different from fileId to ensure distinct IDs
+function generateUniqueTitleId(keyword) {
+  if (!keyword) {
+    // Fallback: generate random ID
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 5; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+  // Add timestamp to ensure uniqueness even for same keyword
+  // Use different seed than fileId to ensure different ID
+  const timestamp = Date.now();
+  const inputString = `${keyword}_title_${timestamp}`;
+  // Create hash from keyword + "title" + timestamp and convert to uppercase alphanumeric
+  const hash = crypto.createHash('md5').update(inputString).digest('hex');
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  
+  // Convert hex to alphanumeric (5 chars, uppercase)
+  let alphanumeric = '';
+  for (let i = 0; i < 10 && alphanumeric.length < 5; i++) {
+    const num = parseInt(hash.substr(i * 2, 2), 16);
+    const char = chars[num % chars.length];
+    alphanumeric += char;
+  }
+  
+  return alphanumeric.substring(0, 5);
+}
+
 // Generate unique image filename (16 digits + .jpg) from original URL
 // Always unique even for same URL by adding timestamp
 function generateUniqueImageFilename(originalUrl) {
@@ -187,6 +222,317 @@ function generateUniqueImageFilename(originalUrl) {
     result = result.substr(0, 16);
   }
   return `${result}.jpg`;
+}
+
+// Generate 4 SEO-optimized description variations using OpenAI
+async function generateDescriptionVariations(originalDescription, title) {
+  const openai = new OpenAI({
+    apiKey: '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'
+  });
+
+  const prompt = `Generate 4 SEO-optimized description variations for the following content. All variations must be related but unique, and optimized for different purposes:
+
+Original description: "${originalDescription}"
+Title: "${title}"
+
+Generate 4 variations:
+1. META DESCRIPTION (155-160 characters): For search engine results. Focus on keywords, concise, include call-to-action.
+2. OG DESCRIPTION (200 characters): For social media sharing (Facebook, LinkedIn). Engaging, story-telling style, longer.
+3. TWITTER DESCRIPTION (200 characters): For Twitter cards. Casual, attention-grabbing, can use emoji if appropriate.
+4. PARAGRAPH CONTENT (natural length, 250-300 characters): For visible content. Informative, natural language, detailed.
+
+Return ONLY a valid JSON object with exactly these keys:
+{
+  "meta": "meta description here",
+  "og": "og description here",
+  "twitter": "twitter description here",
+  "paragraph": "paragraph content here"
+}
+
+Do not include any other text, only the JSON object.`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 800
+    });
+
+    const responseText = completion.choices[0].message.content.trim();
+    
+    // Extract JSON from response (handle markdown code blocks if present)
+    let jsonText = responseText;
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+    
+    const variations = JSON.parse(jsonText);
+    
+    // Validate all required keys exist
+    if (!variations.meta || !variations.og || !variations.twitter || !variations.paragraph) {
+      throw new Error('Missing required variation keys');
+    }
+    
+    return variations;
+  } catch (error) {
+    console.warn('⚠️  OpenAI API error, using original description for all variations:', error.message);
+    // Fallback: use original description for all variations
+    return {
+      meta: originalDescription.substring(0, 160),
+      og: originalDescription.substring(0, 200),
+      twitter: originalDescription.substring(0, 200),
+      paragraph: originalDescription
+    };
+  }
+}
+
+// Sanitize keyword for filename (SEO-friendly)
+function sanitizeKeywordForFilename(keyword) {
+  if (!keyword) return 'default';
+  
+  return keyword
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')  // Remove special characters
+    .replace(/\s+/g, '-')           // Replace spaces with dash
+    .replace(/-+/g, '-')             // Replace multiple dashes with single dash
+    .replace(/^-|-$/g, '');          // Remove leading/trailing dash
+}
+
+// Load all keywords from CSV/XLSX file into memory
+async function loadKeywordsFromFile(filePath) {
+  const keywordsMap = new Map();
+  
+  if (!fs.existsSync(filePath)) {
+    return keywordsMap;
+  }
+  
+  const ext = path.extname(filePath).toLowerCase();
+  
+  try {
+    if (ext === '.csv') {
+      // Read CSV file
+      return new Promise((resolve, reject) => {
+        const results = [];
+        fs.createReadStream(filePath)
+          .pipe(csv())
+          .on('data', (data) => results.push(data))
+          .on('end', () => {
+            // Convert array to Map (keyword -> content object)
+            results.forEach(row => {
+              const keyword = row.keyword?.trim();
+              if (keyword) {
+                keywordsMap.set(keyword.toLowerCase(), {
+                  title: row.title?.trim() || null,
+                  meta_description: row.meta_description?.trim() || null,
+                  og_description: row.og_description?.trim() || null,
+                  twitter_description: row.twitter_description?.trim() || null,
+                  paragraph_content: row.paragraph_content?.trim() || null,
+                  keywords: row.keywords?.trim() || null
+                });
+              }
+            });
+            resolve(keywordsMap);
+          })
+          .on('error', reject);
+      });
+    } else if (ext === '.xlsx' || ext === '.xls') {
+      // Read XLSX file
+      const workbook = XLSX.readFile(filePath);
+      const sheetName = workbook.SheetNames[0]; // Use first sheet
+      const worksheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(worksheet);
+      
+      data.forEach(row => {
+        const keyword = row.keyword?.trim() || row.KEYWORD?.trim();
+        if (keyword) {
+          keywordsMap.set(keyword.toLowerCase(), {
+            title: (row.title || row.TITLE)?.trim() || null,
+            meta_description: (row.meta_description || row.META_DESCRIPTION || row['meta_description'])?.trim() || null,
+            og_description: (row.og_description || row.OG_DESCRIPTION || row['og_description'])?.trim() || null,
+            twitter_description: (row.twitter_description || row.TWITTER_DESCRIPTION || row['twitter_description'])?.trim() || null,
+            paragraph_content: (row.paragraph_content || row.PARAGRAPH_CONTENT || row['paragraph_content'])?.trim() || null,
+            keywords: (row.keywords || row.KEYWORDS)?.trim() || null
+          });
+        }
+      });
+      
+      return keywordsMap;
+    } else {
+      console.warn(`⚠️  Unsupported file format: ${ext}`);
+      return keywordsMap;
+    }
+  } catch (error) {
+    console.warn(`⚠️  Error reading keywords file: ${error.message}`);
+    return keywordsMap;
+  }
+}
+
+// Get content from CSV/XLSX file for a specific keyword
+// Returns content in the same format as generateContentFromKeyword
+async function getContentFromFile(keyword, keywordsMap) {
+  if (!keywordsMap || keywordsMap.size === 0) {
+    return null;
+  }
+  
+  const keywordLower = keyword.toLowerCase();
+  const fileContent = keywordsMap.get(keywordLower);
+  
+  if (!fileContent) {
+    return null;
+  }
+  
+  // Check if at least title or meta_description exists
+  if (!fileContent.title && !fileContent.meta_description) {
+    return null;
+  }
+  
+  // Convert file content format to generateContentFromKeyword format
+  return {
+    title: fileContent.title || null,
+    description: {
+      meta: fileContent.meta_description || null,
+      og: fileContent.og_description || null,
+      twitter: fileContent.twitter_description || null,
+      paragraph: fileContent.paragraph_content || null
+    },
+    keywords: fileContent.keywords || null
+  };
+}
+
+// Generate SEO-optimized content from keyword using OpenAI
+async function generateContentFromKeyword(keyword) {
+  const openai = new OpenAI({
+    apiKey: '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'
+  });
+
+  // Load AI prompts configuration
+  const promptsPath = path.join(__dirname, '../config/ai-prompts.js');
+  let promptConfig;
+  try {
+    promptConfig = require(promptsPath).contentGeneration;
+  } catch (error) {
+    console.warn('⚠️  AI prompts config not found, using default prompt');
+    promptConfig = {
+      template: `Generate SEO-optimized video content for keyword: "{keyword}"
+
+Generate comprehensive, SEO-focused content that will rank well in search engines. All content must be highly relevant to the keyword and optimized for search visibility.
+
+Requirements:
+1. TITLE (60-70 characters, SEO-optimized):
+   - Include the keyword naturally
+   - Compelling and click-worthy
+   - Focus on search intent
+
+2. DESCRIPTION - META (155-160 characters, for search engine results):
+   - Include keyword in first 120 characters
+   - Compelling call-to-action
+   - Keyword-optimized for SERP
+
+3. DESCRIPTION - OG (200 characters, for social media):
+   - Engaging and shareable
+   - Include keyword naturally
+   - Story-telling style for social engagement
+
+4. DESCRIPTION - TWITTER (200 characters, for Twitter cards):
+   - Attention-grabbing
+   - Can use emoji if appropriate
+   - Include keyword
+   - Shareable format
+
+5. DESCRIPTION - PARAGRAPH (250-350 characters, for visible content):
+   - Natural, informative language
+   - Include keyword multiple times naturally
+   - Detailed and engaging
+   - SEO-optimized with keyword density
+
+6. KEYWORDS (comma-separated, 5-10 keywords):
+   - Primary keyword first
+   - Related LSI keywords
+   - Long-tail variations
+   - SEO-focused keyword selection
+
+Return ONLY a valid JSON object:
+{
+  "title": "SEO-optimized title here",
+  "description": {
+    "meta": "Meta description (155-160 chars)",
+    "og": "OG description (200 chars)",
+    "twitter": "Twitter description (200 chars)",
+    "paragraph": "Paragraph content (250-350 chars)"
+  },
+  "keywords": "keyword1, keyword2, keyword3, keyword4, keyword5"
+}
+
+Focus on SEO: keyword placement, search intent, and ranking potential.`,
+      model: 'gpt-4o-mini',
+      temperature: 0.7,
+      max_tokens: 1000
+    };
+  }
+
+  // Replace {keyword} placeholder with actual keyword
+  const prompt = promptConfig.template.replace('{keyword}', keyword);
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: promptConfig.model || 'gpt-4o-mini',
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      temperature: promptConfig.temperature || 0.7,
+      max_tokens: promptConfig.max_tokens || 1000
+    });
+
+    const responseText = completion.choices[0].message.content.trim();
+    
+    // Extract JSON from response (handle markdown code blocks if present)
+    let jsonText = responseText;
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+    
+    const content = JSON.parse(jsonText);
+    
+    // Validate all required keys exist
+    if (!content.title || !content.description || !content.keywords) {
+      throw new Error('Missing required content keys');
+    }
+    
+    if (!content.description.meta || !content.description.og || 
+        !content.description.twitter || !content.description.paragraph) {
+      throw new Error('Missing description variations');
+    }
+    
+    return content;
+  } catch (error) {
+    console.warn('⚠️  OpenAI API error, using fallback content:', error.message);
+    // Fallback: generate basic SEO content from keyword
+    const fallbackTitle = `${keyword.charAt(0).toUpperCase() + keyword.slice(1)}: Discover Latest Trends and Insights`;
+    const fallbackMeta = `${keyword.charAt(0).toUpperCase() + keyword.slice(1)}. Explore the latest trends, insights, and expert analysis. Discover more about ${keyword} and stay updated with current developments.`;
+    const fallbackOg = `Join us as we explore ${keyword}. Discover the latest trends, insights, and expert analysis. Learn more about current developments and future prospects.`;
+    const fallbackTwitter = `🔍 Explore ${keyword}! Discover the latest trends, insights, and expert analysis. Learn more about current developments.`;
+    const fallbackParagraph = `In this comprehensive video, we explore ${keyword} in detail. Discover the latest trends, insights, and expert analysis. Learn about current developments, future prospects, and key considerations. This in-depth coverage provides valuable information for anyone interested in ${keyword}.`;
+    const fallbackKeywords = `${keyword}, ${keyword} trends, ${keyword} insights, ${keyword} analysis, ${keyword} guide`;
+    
+    return {
+      title: fallbackTitle.substring(0, 70),
+      description: {
+        meta: fallbackMeta.substring(0, 160),
+        og: fallbackOg.substring(0, 200),
+        twitter: fallbackTwitter.substring(0, 200),
+        paragraph: fallbackParagraph.substring(0, 350)
+      },
+      keywords: fallbackKeywords
+    };
+  }
 }
 
 // Replace image URL with sylheter-ogrogoti.com format
@@ -397,7 +743,7 @@ function buildVideoObject(videoData, index = 0) {
   return videoObject;
 }
 
-async function scrapeContent(url, slug = null) {
+async function scrapeContent(url, slug = null, aiContent = null) {
   try {
     const response = await axios.get(url, {
       headers: {
@@ -411,9 +757,20 @@ async function scrapeContent(url, slug = null) {
     // Generate unique file ID for this HTML file
     const fileId = generateUniqueFileId(slug || url);
 
-    const title = $('h1.videotitletext').text().trim() || $('title').text().trim();
-    const description = $('div.videocontenttext.videosum p').text().trim() || 
-                       $('meta[name="description"]').attr('content') || '';
+    // Use AI-generated content if provided, otherwise use scraped content (backward compatibility)
+    const scrapedTitle = $('h1.videotitletext').text().trim() || $('title').text().trim();
+    const scrapedDescription = $('div.videocontenttext.videosum p').text().trim() || 
+                                $('meta[name="description"]').attr('content') || '';
+    const scrapedKeywords = $('meta[name="keywords"]').attr('content') || '';
+    
+    // Use AI content if provided, otherwise use scraped content
+    const title = aiContent?.title || scrapedTitle;
+    const description = aiContent?.description?.meta || scrapedDescription;
+    const ogDescription = aiContent?.description?.og || scrapedDescription;
+    const twitterDescription = aiContent?.description?.twitter || scrapedDescription;
+    const paragraphDescription = aiContent?.description?.paragraph || scrapedDescription;
+    const keywords = aiContent?.keywords || scrapedKeywords;
+    
     const company = $('p.videodatecompany').text().split('|')[1]?.trim() || '';
     // Generate dateText using current date (not from scraped data)
     const now = new Date();
@@ -426,7 +783,7 @@ async function scrapeContent(url, slug = null) {
     const originalThumbnailUrl = $('meta[property="og:image"]').attr('content') || '';
     // Replace thumbnail URL with unique format
     const thumbnailUrl = replaceImageUrl(originalThumbnailUrl, fileId);
-    const keywords = $('meta[name="keywords"]').attr('content') || '';
+    // Keywords already set above from AI content or scraped
     const author = $('meta[name="author"]').attr('content') || '';
     
     // Extract encrypted ID from video URL
@@ -635,7 +992,7 @@ async function scrapeContent(url, slug = null) {
     if (!topVideo) {
       topVideo = buildVideoObject({
         title,
-        description,
+        description: paragraphDescription, // Use paragraph description for visible content
         company,
         thumbnailUrl,
         keywords,
@@ -665,7 +1022,10 @@ async function scrapeContent(url, slug = null) {
 
     return {
       title,
-      description,
+      description, // Meta description (for backward compatibility)
+      ogDescription, // OG description
+      twitterDescription, // Twitter description
+      paragraphDescription, // Paragraph content
       company,
       dateText,
       videoUrl,
@@ -1635,7 +1995,7 @@ function generateBannerData() {
 }
 
 // Generate Next.js hydration scripts with full data (matching example structure)
-function generateHydrationScripts(data, slug, chunks) {
+function generateHydrationScripts(data, slug, chunks, originalUrl = null) {
   // Load site config for URL
   const configPath = path.join(__dirname, '../config/site-config.json');
   let siteConfig = {};
@@ -1648,8 +2008,19 @@ function generateHydrationScripts(data, slug, chunks) {
   const siteroot = siteConfig.siteConfig?.siteroot || 'https://www.packaginginsights.com';
   const videoPath = siteConfig.siteConfig?.videoPath || '/video';
   const url = `${siteroot}${videoPath}/${slug}.html`;
+  
+  // Use slug with ID for URL (not original URL)
+  // This ensures URL matches the filename with ID
+  const canonicalUrl = url; // Use slug-based URL with ID
+  const ogUrl = url; // Use slug-based URL with ID
+  
+  // Escape URLs for use in JSON/script contexts
+  const escapedCanonicalUrl = canonicalUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const escapedOgUrl = ogUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const escapedTitle = data.title.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
   const escapedDesc = data.description.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+  const escapedOgDesc = (data.ogDescription || data.description).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+  const escapedTwitterDesc = (data.twitterDescription || data.description).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
   const webpackChunk = chunks.webpack || null;
 
   // Fix Top_video format: must be ARRAY, not object
@@ -1716,12 +2087,12 @@ function generateHydrationScripts(data, slug, chunks) {
   // Escape the full data object
   const escapedHydrationData = escapeForHydration(hydrationData);
 
-  // Generate JSON-LD script content
+  // Generate JSON-LD script content (use meta description for consistency)
   const jsonLdData = {
     "@context": "https://schema.org",
     "@type": "VideoObject",
     "name": data.title,
-    "description": data.description,
+    "description": data.description, // Use meta description for JSON-LD consistency
     "thumbnailUrl": data.thumbnailUrl || '',
     "uploadDate": new Date().toISOString()
   };
@@ -1768,7 +2139,7 @@ function generateHydrationScripts(data, slug, chunks) {
 	<script>self.__next_f.push([1,"9:\\"$Sreact.fragment\\"\\nb:I[3405,[],\\"\\"]\\nc:I[48274,[],\\"\\"]\\ne:I[98080,[],\\"OutletBoundary\\"]\\n10:I[98080,[],\\"MetadataBoundary\\"]\\n12:I[98080,[],\\"ViewportBoundary\\"]\\n14:I[88306,[],\\"\\"]\\n${cssHydrationLinks}\\n"])</script>
 	<script>self.__next_f.push([1,"0:{\\"P\\":null,\\"b\\":\\"SzcZiY29wPC6TYSEML0ds\\",\\"p\\":\\"\\",\\"c\\":[\\"\\",\\"video\\",\\"${slug}.html\\"],\\"i\\":false,\\"f\\":[[[\\"\\",{\\"Tags\\":[\\"video\\",{\\"Tags\\":[[\\"seo\\",\\"${slug}.html\\",\\"d\\"],{\\"Tags\\":[\\"__PAGE__\\",{}]}]}]},\\"$undefined\\",\\"$undefined\\",true]]}]\\n"])</script>
 	<script>self.__next_f.push([1,"13:[[\\"$\\",\\"meta\\",\\"0\\",{\\"name\\":\\"viewport\\",\\"content\\":\\"width=device-width, initial-scale=1\\"}]]\\n"])</script>
-	<script>self.__next_f.push([1,"11:[[\\"$\\",\\"meta\\",\\"0\\",{\\"charSet\\":\\"utf-8\\"}],[\"$\",\"meta\",\"1\",{\"name\":\"description\",\"content\":\"${escapedDesc}\"}],[\"$\",\"meta\",\"2\",{\"name\":\"keywords\",\"content\":\"${data.keywords || ''}\"}],[\"$\",\"link\",\"3\",{\"rel\":\"canonical\",\"href\":\"${url}\"}],[\"$\",\"meta\",\"4\",{\"property\":\"og:title\",\"content\":\"${escapedTitle}\"}],[\"$\",\"meta\",\"5\",{\"property\":\"og:description\",\"content\":\"${escapedDesc}\"}],[\"$\",\"meta\",\"6\",{\"property\":\"og:url\",\"content\":\"${url}\"}],[\"$\",\"meta\",\"7\",{\"property\":\"og:site_name\",\"content\":\"${siteroot}\"}],[\"$\",\"meta\",\"8\",{\"property\":\"og:image\",\"content\":\"${data.thumbnailUrl || ''}\"}],[\"$\",\"meta\",\"9\",{\"name\":\"twitter:card\",\"content\":\"summary_large_image\\"}],[\"$\",\"meta\",\"10\",{\"name\":\"twitter:site\",\"content\":\"${siteroot}\"}],[\"$\",\"meta\",\"11\",{\"name\":\"twitter:title\",\"content\":\"${escapedTitle}\"}],[\"$\",\"meta\",\"12\",{\"name\":\"twitter:description\",\"content\":\"${escapedDesc}\"}],[\"$\",\"meta\",\"13\",{\"name\":\"twitter:image\",\"content\":\"${data.thumbnailUrl || ''}\"}]]\\n"])</script>
+	<script>self.__next_f.push([1,"11:[[\\"$\\",\\"meta\\",\\"0\\",{\\"charSet\\":\\"utf-8\\"}],[\"$\",\"meta\",\"1\",{\"name\":\"description\",\"content\":\"${escapedDesc}\"}],[\"$\",\"meta\",\"2\",{\"name\":\"keywords\",\"content\":\"${data.keywords || ''}\"}],[\"$\",\"link\",\"3\",{\"rel\":\"canonical\",\"href\":\"${escapedCanonicalUrl}\"}],[\"$\",\"meta\",\"4\",{\"property\":\"og:title\",\"content\":\"${escapedTitle}\"}],[\"$\",\"meta\",\"5\",{\"property\":\"og:description\",\"content\":\"${escapedDesc}\"}],[\"$\",\"meta\",\"6\",{\"property\":\"og:url\",\"content\":\"${escapedOgUrl}\"}],[\"$\",\"meta\",\"7\",{\"property\":\"og:site_name\",\"content\":\"${siteroot}\"}],[\"$\",\"meta\",\"8\",{\"property\":\"og:image\",\"content\":\"${data.thumbnailUrl || ''}\"}],[\"$\",\"meta\",\"9\",{\"name\":\"twitter:card\",\"content\":\"summary_large_image\\"}],[\"$\",\"meta\",\"10\",{\"name\":\"twitter:site\",\"content\":\"${siteroot}\"}],[\"$\",\"meta\",\"11\",{\"name\":\"twitter:title\",\"content\":\"${escapedTitle}\"}],[\"$\",\"meta\",\"12\",{\"name\":\"twitter:description\",\"content\":\"${escapedDesc}\"}],[\"$\",\"meta\",\"13\",{\"name\":\"twitter:image\",\"content\":\"${data.thumbnailUrl || ''}\"}]]\\n"])</script>
 	<script>self.__next_f.push([1,"f:null\\n"])</script>
 	<script>self.__next_f.push([1,"15:I[17204,[\\"7240\\",\\"static/chunks/53c13509-0d4fc72ddf83f729.js\\",\\"7699\\",\\"static/chunks/8e1d74a4-b53153930fa1f840.js\\",\\"614\\",\\"static/chunks/3d47b92a-e354a28c805214ca.js\\",\\"7259\\",\\"static/chunks/479ba886-59c64b7535c61d12.js\\",\\"6950\\",\\"static/chunks/f8025e75-ac09396323c75bf9.js\\",\\"5131\\",\\"static/chunks/5131-86750c6ed50bfaa2.js\\",\\"4134\\",\\"static/chunks/4134-f058a0f7d2fee07d.js\\",\\"9781\\",\\"static/chunks/9781-6b379b5c7c1afdc0.js\\",\\"8909\\",\\"static/chunks/8909-fd7c41986e96ad19.js\\",\\"563\\",\\"static/chunks/563-097f9277f0fcebe8.js\\",\\"2104\\",\\"static/chunks/2104-da95aebb3659b560.js\\",\\"7222\\",\\"static/chunks/7222-99d4279fea72b91e.js\\",\\"8863\\",\\"static/chunks/8863-0c5637bef66484f1.js\\",\\"9418\\",\\"static/chunks/9418-c09abfde53dad3b0.js\\",\\"3968\\",\\"static/chunks/3968-2d96a164930c5ae8.js\\",\\"2559\\",\\"static/chunks/app/video/%5Bseo%5D/page-c13692f9c2ccf2e5.js\\"],\\"default\\"]\\n16:I[8123,[\\"7240\\",\\"static/chunks/53c13509-0d4fc72ddf83f729.js\\",\\"7699\\",\\"static/chunks/8e1d74a4-b53153930fa1f840.js\\",\\"614\\",\\"static/chunks/3d47b92a-e354a28c805214ca.js\\",\\"7259\\",\\"static/chunks/479ba886-59c64b7535c61d12.js\\",\\"6950\\",\\"static/chunks/f8025e75-ac09396323c75bf9.js\\",\\"5131\\",\\"static/chunks/5131-86750c6ed50bfaa2.js\\",\\"4134\\",\\"static/chunks/4134-f058a0f7d2fee07d.js\\",\\"9781\\",\\"static/chunks/9781-6b379b5c7c1afdc0.js\\",\\"8909\\",\\"static/chunks/8909-fd7c41986e96ad19.js\\",\\"563\\",\\"static/chunks/563-097f9277f0fcebe8.js\\",\\"2104\\",\\"static/chunks/2104-da95aebb3659b560.js\\",\\"7222\\",\\"static/chunks/7222-99d4279fea72b91e.js\\",\\"8863\\",\\"static/chunks/8863-0c5637bef66484f1.js\\",\\"9418\\",\\"static/chunks/9418-c09abfde53dad3b0.js\\",\\"3968\\",\\"static/chunks/3968-2d96a164930c5ae8.js\\",\\"2559\\",\\"static/chunks/app/video/%5Bseo%5D/page-c13692f9c2ccf2e5.js\\"],\\"default\\"]\\n"])</script>
 	<script>self.__next_f.push([1,"d:[[\\"$\\",\\"meta\\",null,{\\"name\\":\\"title\\",\\"content\\":\\"${escapedTitle}\"}],[\"$\",\"title\",null,{\"Tags\":\"${escapedTitle}\"}],[\"$\",\"$L15\",null,${escapedHydrationData}],[\"$\",\"script\",null,{\"type\":\"application/ld+json\",\"Tags\":\"${escapedJsonLd}\"}],[\"$\",\"$L16\",null,${escapedBannerVideos}],[\"$\",\"$L16\",null,${escapedBannerCompany}],[\"$\",\"$L16\",null,${escapedBannerKeywords}]]\\n"])</script>
@@ -1786,7 +2157,7 @@ function generateHash(length = 14) {
   return result;
 }
 
-function generateHTML(data, slug, chunks) {
+function generateHTML(data, slug, chunks, originalUrl = null) {
   // Load site config for URL
   const configPath = path.join(__dirname, '../config/site-config.json');
   let siteConfig = {};
@@ -1799,6 +2170,15 @@ function generateHTML(data, slug, chunks) {
   const siteroot = siteConfig.siteConfig?.siteroot || 'https://www.packaginginsights.com';
   const videoPath = siteConfig.siteConfig?.videoPath || '/video';
   const url = `${siteroot}${videoPath}/${slug}.html`;
+  
+  // Use slug with ID for URL (not original URL)
+  // This ensures URL matches the filename with ID
+  const canonicalUrl = url; // Use slug-based URL with ID
+  const ogUrl = url; // Use slug-based URL with ID
+  
+  // Escape URLs for use in JSON/script contexts
+  const escapedCanonicalUrl = canonicalUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const escapedOgUrl = ogUrl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   
   // Get asset paths from config
   const jqueryPath = siteConfig.assets?.jqueryPath || '/assets/common/js/jquery/jquery-3.6.0.min.js';
@@ -1864,10 +2244,18 @@ function generateHTML(data, slug, chunks) {
       ? '<div class="rightheadicondiv"><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 24 24" class="arrowheadicon" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path d="M10.707 17.707 16.414 12l-5.707-5.707-1.414 1.414L13.586 12l-4.293 4.293z"></path></svg></div>'
       : '';
     
+    // Replace "Videos" with title if it matches
+    let crumbName = crumb.name === 'Videos' ? data.title : crumb.name;
+    
+    // For current item (no href), replace with description if available
+    if (!crumb.href) {
+      crumbName = data.paragraphDescription || data.description || crumbName;
+    }
+    
     if (crumb.href) {
-      return `<a href="${crumb.href}" class="source-color bredgrum-fontsize">${crumb.name}</a>${separator}`;
+      return `<a href="${crumb.href}" class="source-color bredgrum-fontsize">${crumbName}</a>${separator}`;
     } else {
-      return `<span class="cursordefault">${crumb.name}</span>`;
+      return `<span class="cursordefault">${crumbName}</span>`;
     }
   }).join('');
 
@@ -1904,14 +2292,14 @@ ${jsScripts}
 <meta name="description" content="${data.description}"/>
 <meta name="keywords" content="${data.keywords}"/>
 <meta property="og:title" content="${data.title}"/>
-<meta property="og:description" content="${data.description}"/>
-<meta property="og:url" content="${url}"/>
+<meta property="og:description" content="${data.ogDescription || data.description}"/>
+<meta property="og:url" content="${ogUrl}"/>
 <meta property="og:site_name" content=" "/>
 <meta property="og:image" content="${data.thumbnailUrl}"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:site" content=" "/>
 <meta name="twitter:title" content="${data.title}"/>
-<meta name="twitter:description" content="${data.description}"/>
+<meta name="twitter:description" content="${data.twitterDescription || data.description}"/>
 <meta name="twitter:image" content="${data.thumbnailUrl}"/>
 <link rel="preload" href="${fontPath}" as="font" type="font/ttf" crossorigin="anonymous"/>
 <meta id="Authorname" name="Author" content="CNS MEDIA"/>
@@ -1955,7 +2343,7 @@ ${jsScripts}
 	<div class="homevideodiv responsevideoheight">
 	<iframe src="${data.videoUrl}" allowFullScreen="" title="${data.title}"></iframe></div>
 	<div class="contentdetailsdiv ">
-	<div class="videocontenttext videosum" style="width:100%"><input type="hidden" name="video_title" value="${data.title}"/><input type="hidden" name="video_id" value=""/><p>${data.description}</p></div></div></div>
+	<div class="videocontenttext videosum" style="width:100%"><input type="hidden" name="video_title" value="${data.title}"/><input type="hidden" name="video_id" value=""/><p>${data.paragraphDescription || data.description}</p></div></div></div>
 	<div class="morecontainer">
 	<div class="moretitlediv">
 	<p class="moretitle">More <!-- -->videos</p>
@@ -2003,7 +2391,7 @@ ${jsScripts}
 	<a href="/subscribe.html" aria-label="Sign up to our newsletters">
 	<div class="icon-container"><svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" color="white" style="color:white" height="24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6"></path><path d="M9 17v1a3 3 0 0 0 6 0v-1"></path></svg></div></a></div></div>
 	<div><a href="#top" class="top_link "><img src="https://assets.innovamarketinsights360.com/insights/Common/Images/trans.gif" alt="trans" loading="eager" fetchPriority="high"/></a></div></div>
-	${generateHydrationScripts(data, slug, chunks)}
+	${generateHydrationScripts(data, slug, chunks, originalUrl)}
 	</body></html>`;
 }
 
@@ -2045,13 +2433,80 @@ function parseUrl(input) {
 
 async function main() {
   const input = process.argv[2];
-  const { url, slug } = parseUrl(input);
   
-  console.log(`Scraping content from: ${url}`);
-  console.log(`Using slug: ${slug}`);
+  // Fixed URL for scraping structure (always the same)
+  const baseUrl = 'https://www.packaginginsights.com/video/drinktec-2025-sidel-debuts-laser-blowing.html';
+  
+  // If input is provided, treat it as keyword; otherwise use default
+  const keyword = input || 'default-content';
+  const outputSlug = sanitizeKeywordForFilename(keyword);
+  
+  // Generate short ID (5 chars) for filename and URL
+  const fileId = generateUniqueFileId(keyword);
+  const shortId = fileId.substring(0, 5).toLowerCase();
+  const slugWithId = `${outputSlug}-${shortId}`;
+  
+  console.log(`📝 Keyword: ${keyword}`);
+  console.log(`📁 Output filename: ${slugWithId}.html`);
+  console.log(`🔗 Scraping structure from: ${baseUrl}`);
   
   try {
-    const data = await scrapeContent(url, slug);
+    // Try to load keywords from CSV/XLSX file (hybrid approach)
+    // Try CSV first, then XLSX
+    const configDir = path.join(__dirname, '../config');
+    let keywordsMap = new Map();
+    let keywordsFilePath = null;
+    
+    // Try CSV file first
+    const csvPath = path.join(configDir, 'keywords.csv');
+    if (fs.existsSync(csvPath)) {
+      keywordsFilePath = csvPath;
+      keywordsMap = await loadKeywordsFromFile(csvPath);
+    } else {
+      // Try XLSX file if CSV doesn't exist
+      const xlsxPath = path.join(configDir, 'keywords.xlsx');
+      if (fs.existsSync(xlsxPath)) {
+        keywordsFilePath = xlsxPath;
+        keywordsMap = await loadKeywordsFromFile(xlsxPath);
+      }
+    }
+    
+    let content = null;
+    
+    // Try to get content from CSV/XLSX file first
+    if (keywordsMap && keywordsMap.size > 0) {
+      const fileType = keywordsFilePath?.endsWith('.xlsx') || keywordsFilePath?.endsWith('.xls') ? 'XLSX' : 'CSV';
+      console.log(`📋 Loaded ${keywordsMap.size} keywords from ${fileType} file`);
+      content = await getContentFromFile(keyword, keywordsMap);
+      
+      if (content) {
+        console.log('✅ Found content in CSV/XLSX file');
+        console.log(`✅ Title: ${content.title}`);
+        console.log(`✅ Keywords: ${content.keywords || 'N/A'}`);
+      } else {
+        console.log('⚠️  Keyword not found in CSV/XLSX file, using AI fallback...');
+      }
+    } else {
+      console.log('⚠️  No keywords file found (keywords.csv or keywords.xlsx) or file is empty, using AI...');
+    }
+    
+    // If content not found in CSV/XLSX, generate using AI
+    if (!content) {
+      console.log('🤖 Generating SEO-optimized content with AI...');
+      content = await generateContentFromKeyword(keyword);
+      
+      console.log(`✅ Generated title: ${content.title}`);
+      console.log(`✅ Generated keywords: ${content.keywords}`);
+    }
+    
+    // Scrape structure from fixed URL (content will be overridden by CSV/AI content)
+    const data = await scrapeContent(baseUrl, outputSlug, content);
+    
+    // Generate unique title ID (5 chars, uppercase, different from file ID)
+    const titleId = generateUniqueTitleId(keyword);
+    
+    // Append title ID to title in format: "Title [ABCDE]"
+    data.title = `${data.title} [${titleId}]`;
     
     // Use scraped chunks if available, otherwise try to extract from build
     let chunks = { css: [], js: [], polyfills: null, webpack: null };
@@ -2097,7 +2552,7 @@ async function main() {
       console.log('⚠️  No chunks found. HTML will be generated without CSS/JS references.');
     }
     
-    const html = generateHTML(data, slug, chunks);
+    const html = generateHTML(data, slugWithId, chunks, baseUrl);
     
     // Create output directory if it doesn't exist
     const outputDir = path.join(__dirname, '../../output');
@@ -2105,12 +2560,14 @@ async function main() {
       fs.mkdirSync(outputDir, { recursive: true });
     }
     
-    // Write HTML file
-    const outputPath = path.join(outputDir, `${slug}.html`);
+    // Write HTML file with keyword-based filename including ID
+    const outputPath = path.join(outputDir, `${slugWithId}.html`);
     fs.writeFileSync(outputPath, html, 'utf-8');
     
     console.log(`✅ HTML generated successfully: ${outputPath}`);
     console.log(`📄 File size: ${(html.length / 1024).toFixed(2)} KB`);
+    console.log(`🔑 SEO Title: ${data.title}`);
+    console.log(`🔑 SEO Keywords: ${data.keywords}`);
   } catch (error) {
     console.error('❌ Error:', error.message);
     process.exit(1);
