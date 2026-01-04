@@ -198,43 +198,55 @@ async function loadKeywordsFromFile(keywordsFilePath) {
 }
 
 // Save variations to CSV
-function saveVariationsToCSV(variations, outputPath) {
-  const headers = ['keyword', 'variation_id', 'title', 'meta_description', 'paragraph_content', 'keywords'];
-  
-  // Check if file exists to append or create new
-  const fileExists = fs.existsSync(outputPath);
-  const writeStream = fs.createWriteStream(outputPath, { flags: fileExists ? 'a' : 'w' });
-  
-  // Write headers if new file
-  if (!fileExists) {
-    writeStream.write(headers.join(',') + '\n');
-  }
-  
-  // Write variations
-  for (const result of variations) {
-    for (let i = 0; i < result.variations.length; i++) {
-      const variation = result.variations[i];
-      
-      // Extract keywords from title, meta_description, and paragraph_content
-      const extractedKeywords = extractKeywords(
-        variation.title || '',
-        variation.meta_description || '',
-        variation.paragraph_content || ''
-      );
-      
-      const row = [
-        `"${result.keyword}"`,
-        i + 1,
-        `"${(variation.title || '').replace(/"/g, '""')}"`,
-        `"${(variation.meta_description || '').replace(/"/g, '""')}"`,
-        `"${(variation.paragraph_content || '').replace(/"/g, '""')}"`,
-        `"${extractedKeywords.replace(/"/g, '""')}"`,
-      ];
-      writeStream.write(row.join(',') + '\n');
+async function saveVariationsToCSV(variations, outputPath) {
+  return new Promise((resolve, reject) => {
+    const headers = ['keyword', 'variation_id', 'title', 'meta_description', 'paragraph_content', 'keywords'];
+    
+    // Check if file exists to append or create new
+    const fileExists = fs.existsSync(outputPath);
+    const writeStream = fs.createWriteStream(outputPath, { flags: fileExists ? 'a' : 'w' });
+    
+    // Handle errors
+    writeStream.on('error', (error) => {
+      reject(error);
+    });
+    
+    // Resolve when stream is finished
+    writeStream.on('finish', () => {
+      resolve();
+    });
+    
+    // Write headers if new file
+    if (!fileExists) {
+      writeStream.write(headers.join(',') + '\n');
     }
-  }
-  
-  writeStream.end();
+    
+    // Write variations
+    for (const result of variations) {
+      for (let i = 0; i < result.variations.length; i++) {
+        const variation = result.variations[i];
+        
+        // Extract keywords from title, meta_description, and paragraph_content
+        const extractedKeywords = extractKeywords(
+          variation.title || '',
+          variation.meta_description || '',
+          variation.paragraph_content || ''
+        );
+        
+        const row = [
+          `"${result.keyword}"`,
+          i + 1,
+          `"${(variation.title || '').replace(/"/g, '""')}"`,
+          `"${(variation.meta_description || '').replace(/"/g, '""')}"`,
+          `"${(variation.paragraph_content || '').replace(/"/g, '""')}"`,
+          `"${extractedKeywords.replace(/"/g, '""')}"`,
+        ];
+        writeStream.write(row.join(',') + '\n');
+      }
+    }
+    
+    writeStream.end();
+  });
 }
 
 // Load checkpoint
@@ -296,8 +308,8 @@ async function processKeywordsBatch(keywords, outputPath, checkpointPath) {
     try {
       const results = await generateVariationsBatch(batch);
       
-      // Save to CSV
-      saveVariationsToCSV(results, outputPath);
+      // Save to CSV (await to ensure file is written)
+      await saveVariationsToCSV(results, outputPath);
       
       // Update checkpoint
       for (const keyword of batch) {
