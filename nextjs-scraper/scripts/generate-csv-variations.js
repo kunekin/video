@@ -22,7 +22,7 @@ const openai = new OpenAI({
 // Configuration
 const CONFIG = {
   keywordsPerCall: 5, // Number of keywords per API call (reduced for better JSON reliability)
-  variationsPerKeyword: 20, // Number of variations to generate per keyword (reduced for better JSON reliability)
+  variationsPerKeyword: 5, // Number of variations to generate per keyword (reduced for better JSON reliability)
   batchSize: 100, // Save checkpoint every N keywords
   maxWorkers: 5, // Number of parallel API calls
   rateLimitDelay: 100, // Delay between API calls (ms) to respect rate limits
