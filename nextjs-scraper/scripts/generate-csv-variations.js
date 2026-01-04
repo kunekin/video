@@ -4,6 +4,13 @@ const csv = require('csv-parser');
 const XLSX = require('xlsx');
 const OpenAI = require('openai');
 
+// Load environment variables from .env file if exists
+try {
+  require('dotenv').config({ path: path.join(__dirname, '../.env') });
+} catch (e) {
+  // dotenv not installed or .env not found, continue without it
+}
+
 // Load AI prompts config
 const aiPrompts = require('../config/ai-prompts');
 

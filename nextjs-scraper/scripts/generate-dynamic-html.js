@@ -8,6 +8,13 @@ const OpenAI = require('openai');
 const csv = require('csv-parser');
 const XLSX = require('xlsx');
 
+// Load environment variables from .env file if exists
+try {
+  require('dotenv').config({ path: path.join(__dirname, '../.env') });
+} catch (e) {
+  // dotenv not installed or .env not found, continue without it
+}
+
 // Function to extract chunks from Next.js build output
 function extractChunksFromBuild() {
   const buildDir = path.join(__dirname, '../.next');
