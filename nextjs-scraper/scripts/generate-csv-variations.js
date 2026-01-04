@@ -35,10 +35,8 @@ async function generateVariationsBatch(keywords, retries = 3) {
 For each keyword, generate ${CONFIG.variationsPerKeyword} unique variations. Each variation must include:
 1. TITLE (60-70 characters, SEO-optimized, unique per variation)
 2. META DESCRIPTION (155-160 characters, for search engine results)
-3. OG DESCRIPTION (200 characters, for social media)
-4. TWITTER DESCRIPTION (200 characters, for Twitter cards)
-5. PARAGRAPH CONTENT (250-350 characters, for visible content)
-6. KEYWORDS (5-10 keywords, comma-separated)
+3. PARAGRAPH CONTENT (250-350 characters, for visible content)
+4. KEYWORDS (5-10 keywords, comma-separated)
 
 Return ONLY a valid JSON object with this structure:
 {
@@ -49,8 +47,6 @@ Return ONLY a valid JSON object with this structure:
         {
           "title": "Variation 1 title",
           "meta_description": "Meta description 1",
-          "og_description": "OG description 1",
-          "twitter_description": "Twitter description 1",
           "paragraph_content": "Paragraph content 1",
           "keywords": "keyword1, related1, related2"
         },
