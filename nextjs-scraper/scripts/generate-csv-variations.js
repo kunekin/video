@@ -24,9 +24,25 @@ const CONFIG = {
   keywordsPerCall: 5, // Number of keywords per API call (reduced for better JSON reliability)
   variationsPerKeyword: 5, // Number of variations to generate per keyword (reduced for better JSON reliability)
   batchSize: 100, // Save checkpoint every N keywords
-  maxWorkers: 5, // Number of parallel API calls
+  maxWorkers: 5, // Number of parallel API calls (default, can be overridden by MAX_WORKERS env var)
   rateLimitDelay: 100, // Delay between API calls (ms) to respect rate limits
 };
+
+// Get maxWorkers from environment variable or use CONFIG default
+function getMaxWorkers() {
+  const envWorkers = process.env.MAX_WORKERS;
+  if (envWorkers) {
+    const parsed = parseInt(envWorkers, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      // Validate: min 1, max 20 (safe limit)
+      return Math.max(1, Math.min(parsed, 20));
+    }
+  }
+  return CONFIG.maxWorkers;
+}
+
+// Get validated maxWorkers
+const MAX_WORKERS = getMaxWorkers();
 
 // Extract keywords from title, meta description, and paragraph content
 // Returns comma-separated 2-word phrases (bigrams)
@@ -293,52 +309,133 @@ async function processKeywordsBatch(keywords, outputPath, checkpointPath) {
     batches.push(remainingKeywords.slice(i, i + CONFIG.keywordsPerCall));
   }
   
-  console.log(`📦 Processing ${batches.length} batches (${CONFIG.keywordsPerCall} keywords per batch)...\n`);
+  const useParallel = MAX_WORKERS > 1;
+  console.log(`📦 Processing ${batches.length} batches (${CONFIG.keywordsPerCall} keywords per batch)...`);
+  console.log(`⚙️  Workers: ${MAX_WORKERS} ${useParallel ? '(parallel)' : '(sequential)'}\n`);
   
   let successCount = 0;
   let failCount = 0;
   
-  // Process batches with rate limiting
-  for (let i = 0; i < batches.length; i++) {
-    const batch = batches[i];
-    const batchNum = i + 1;
+  if (useParallel) {
+    // Parallel processing with worker limit
+    const processBatch = async (batch, batchNum) => {
+      try {
+        const results = await generateVariationsBatch(batch);
+        
+        // Save to CSV (await to ensure file is written)
+        await saveVariationsToCSV(results, outputPath);
+        
+        // Update checkpoint
+        for (const keyword of batch) {
+          checkpoint.processed.push(keyword);
+          processedSet.add(keyword);
+        }
+        
+        successCount += batch.length;
+        
+        // Save checkpoint every batch
+        saveCheckpoint(checkpointPath, checkpoint);
+        
+        console.log(`✅ Batch ${batchNum}/${batches.length} completed: ${batch.length} keywords, ${results.reduce((sum, r) => sum + r.variations.length, 0)} variations generated`);
+        
+        return { success: true, batchNum };
+      } catch (error) {
+        console.error(`❌ Batch ${batchNum}/${batches.length} failed: ${error.message}`);
+        
+        // Mark all keywords in batch as failed
+        for (const keyword of batch) {
+          checkpoint.failed.push(keyword);
+          failedSet.add(keyword);
+        }
+        
+        failCount += batch.length;
+        saveCheckpoint(checkpointPath, checkpoint);
+        
+        return { success: false, batchNum };
+      }
+    };
     
-    console.log(`[${batchNum}/${batches.length}] Processing batch: ${batch.join(', ')}`);
+    // Process batches in parallel with limit
+    const activeWorkers = [];
+    let batchIndex = 0;
     
-    try {
-      const results = await generateVariationsBatch(batch);
-      
-      // Save to CSV (await to ensure file is written)
-      await saveVariationsToCSV(results, outputPath);
-      
-      // Update checkpoint
-      for (const keyword of batch) {
-        checkpoint.processed.push(keyword);
-        processedSet.add(keyword);
+    while (batchIndex < batches.length || activeWorkers.length > 0) {
+      // Start new workers up to limit
+      while (activeWorkers.length < MAX_WORKERS && batchIndex < batches.length) {
+        const batch = batches[batchIndex];
+        const batchNum = batchIndex + 1;
+        batchIndex++;
+        
+        console.log(`[${batchNum}/${batches.length}] Processing batch: ${batch.join(', ')}`);
+        
+        const worker = processBatch(batch, batchNum).then(result => {
+          // Remove from active workers when done
+          const index = activeWorkers.indexOf(worker);
+          if (index > -1) {
+            activeWorkers.splice(index, 1);
+          }
+          return result;
+        });
+        
+        activeWorkers.push(worker);
       }
       
-      successCount += batch.length;
-      
-      // Save checkpoint every batch
-      saveCheckpoint(checkpointPath, checkpoint);
-      
-      console.log(`✅ Batch ${batchNum} completed: ${batch.length} keywords, ${results.reduce((sum, r) => sum + r.variations.length, 0)} variations generated`);
-      
-      // Rate limiting delay
-      if (i < batches.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, CONFIG.rateLimitDelay));
+      // Wait for at least one worker to complete
+      if (activeWorkers.length > 0) {
+        await Promise.race(activeWorkers);
+        
+        // Small delay to prevent overwhelming the API
+        if (batchIndex < batches.length) {
+          await new Promise(resolve => setTimeout(resolve, CONFIG.rateLimitDelay));
+        }
       }
-    } catch (error) {
-      console.error(`❌ Batch ${batchNum} failed: ${error.message}`);
+    }
+    
+    // Wait for all remaining workers to complete
+    await Promise.all(activeWorkers);
+  } else {
+    // Sequential processing (original logic)
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      const batchNum = i + 1;
       
-      // Mark all keywords in batch as failed
-      for (const keyword of batch) {
-        checkpoint.failed.push(keyword);
-        failedSet.add(keyword);
+      console.log(`[${batchNum}/${batches.length}] Processing batch: ${batch.join(', ')}`);
+      
+      try {
+        const results = await generateVariationsBatch(batch);
+        
+        // Save to CSV (await to ensure file is written)
+        await saveVariationsToCSV(results, outputPath);
+        
+        // Update checkpoint
+        for (const keyword of batch) {
+          checkpoint.processed.push(keyword);
+          processedSet.add(keyword);
+        }
+        
+        successCount += batch.length;
+        
+        // Save checkpoint every batch
+        saveCheckpoint(checkpointPath, checkpoint);
+        
+        console.log(`✅ Batch ${batchNum} completed: ${batch.length} keywords, ${results.reduce((sum, r) => sum + r.variations.length, 0)} variations generated`);
+        
+        // Rate limiting delay
+        if (i < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, CONFIG.rateLimitDelay));
+        }
+      } catch (error) {
+        console.error(`❌ Batch ${batchNum} failed: ${error.message}`);
+        
+        // Mark all keywords in batch as failed
+        for (const keyword of batch) {
+          checkpoint.failed.push(keyword);
+          failedSet.add(keyword);
+        }
+        
+        failCount += batch.length;
+        saveCheckpoint(checkpointPath, checkpoint);
       }
-      
-      failCount += batch.length;
-      saveCheckpoint(checkpointPath, checkpoint);
     }
   }
   
@@ -392,6 +489,7 @@ async function main() {
   console.log(`📄 Output file: ${outputPath}`);
   console.log(`💾 Checkpoint file: ${checkpointPath}`);
   console.log(`⚙️  Config: ${CONFIG.keywordsPerCall} keywords/batch, ${CONFIG.variationsPerKeyword} variations/keyword`);
+  console.log(`🔧 Workers: ${MAX_WORKERS} ${process.env.MAX_WORKERS ? `(from MAX_WORKERS env var)` : `(default)`}`);
   console.log('='.repeat(80) + '\n');
   
   try {
