@@ -313,6 +313,7 @@ async function loadKeywordsFromFile(filePath) {
   }
   
   const ext = path.extname(filePath).toLowerCase();
+  const hasVariationId = filePath.includes('variations') || filePath.includes('variation');
   
   try {
     if (ext === '.csv') {
@@ -323,21 +324,44 @@ async function loadKeywordsFromFile(filePath) {
           .pipe(csv())
           .on('data', (data) => results.push(data))
           .on('end', () => {
-            // Convert array to Map (keyword -> content object)
-            results.forEach(row => {
-              const keyword = row.keyword?.trim();
-              if (keyword) {
-                keywordsMap.set(keyword.toLowerCase(), {
-                  title: row.title?.trim() || null,
-                  meta_description: row.meta_description?.trim() || null,
-                  og_description: row.og_description?.trim() || null,
-                  twitter_description: row.twitter_description?.trim() || null,
-                  paragraph_content: row.paragraph_content?.trim() || null,
-                  keywords: row.keywords?.trim() || null
-                });
-              }
-            });
-            resolve(keywordsMap);
+            if (hasVariationId) {
+              // Group by keyword and store all variations as array
+              const variationsMap = new Map();
+              results.forEach(row => {
+                const keyword = row.keyword?.trim();
+                if (keyword) {
+                  const lowerKeyword = keyword.toLowerCase();
+                  if (!variationsMap.has(lowerKeyword)) {
+                    variationsMap.set(lowerKeyword, []);
+                  }
+                  variationsMap.get(lowerKeyword).push({
+                    title: row.title?.trim() || null,
+                    meta_description: row.meta_description?.trim() || null,
+                    og_description: row.og_description?.trim() || null,
+                    twitter_description: row.twitter_description?.trim() || null,
+                    paragraph_content: row.paragraph_content?.trim() || null,
+                    keywords: row.keywords?.trim() || null
+                  });
+                }
+              });
+              resolve(variationsMap);
+            } else {
+              // Single content per keyword (non-variations)
+              results.forEach(row => {
+                const keyword = row.keyword?.trim();
+                if (keyword) {
+                  keywordsMap.set(keyword.toLowerCase(), {
+                    title: row.title?.trim() || null,
+                    meta_description: row.meta_description?.trim() || null,
+                    og_description: row.og_description?.trim() || null,
+                    twitter_description: row.twitter_description?.trim() || null,
+                    paragraph_content: row.paragraph_content?.trim() || null,
+                    keywords: row.keywords?.trim() || null
+                  });
+                }
+              });
+              resolve(keywordsMap);
+            }
           })
           .on('error', reject);
       });
@@ -348,21 +372,44 @@ async function loadKeywordsFromFile(filePath) {
       const worksheet = workbook.Sheets[sheetName];
       const data = XLSX.utils.sheet_to_json(worksheet);
       
-      data.forEach(row => {
-        const keyword = row.keyword?.trim() || row.KEYWORD?.trim();
-        if (keyword) {
-          keywordsMap.set(keyword.toLowerCase(), {
-            title: (row.title || row.TITLE)?.trim() || null,
-            meta_description: (row.meta_description || row.META_DESCRIPTION || row['meta_description'])?.trim() || null,
-            og_description: (row.og_description || row.OG_DESCRIPTION || row['og_description'])?.trim() || null,
-            twitter_description: (row.twitter_description || row.TWITTER_DESCRIPTION || row['twitter_description'])?.trim() || null,
-            paragraph_content: (row.paragraph_content || row.PARAGRAPH_CONTENT || row['paragraph_content'])?.trim() || null,
-            keywords: (row.keywords || row.KEYWORDS)?.trim() || null
-          });
-        }
-      });
-      
-      return keywordsMap;
+      if (hasVariationId) {
+        // Group by keyword and store all variations as array
+        const variationsMap = new Map();
+        data.forEach(row => {
+          const keyword = (row.keyword || row.KEYWORD)?.trim();
+          if (keyword) {
+            const lowerKeyword = keyword.toLowerCase();
+            if (!variationsMap.has(lowerKeyword)) {
+              variationsMap.set(lowerKeyword, []);
+            }
+            variationsMap.get(lowerKeyword).push({
+              title: (row.title || row.TITLE)?.trim() || null,
+              meta_description: (row.meta_description || row.META_DESCRIPTION || row['meta_description'])?.trim() || null,
+              og_description: (row.og_description || row.OG_DESCRIPTION || row['og_description'])?.trim() || null,
+              twitter_description: (row.twitter_description || row.TWITTER_DESCRIPTION || row['twitter_description'])?.trim() || null,
+              paragraph_content: (row.paragraph_content || row.PARAGRAPH_CONTENT || row['paragraph_content'])?.trim() || null,
+              keywords: (row.keywords || row.KEYWORDS)?.trim() || null
+            });
+          }
+        });
+        return variationsMap;
+      } else {
+        // Single content per keyword
+        data.forEach(row => {
+          const keyword = row.keyword?.trim() || row.KEYWORD?.trim();
+          if (keyword) {
+            keywordsMap.set(keyword.toLowerCase(), {
+              title: (row.title || row.TITLE)?.trim() || null,
+              meta_description: (row.meta_description || row.META_DESCRIPTION || row['meta_description'])?.trim() || null,
+              og_description: (row.og_description || row.OG_DESCRIPTION || row['og_description'])?.trim() || null,
+              twitter_description: (row.twitter_description || row.TWITTER_DESCRIPTION || row['twitter_description'])?.trim() || null,
+              paragraph_content: (row.paragraph_content || row.PARAGRAPH_CONTENT || row['paragraph_content'])?.trim() || null,
+              keywords: (row.keywords || row.KEYWORDS)?.trim() || null
+            });
+          }
+        });
+        return keywordsMap;
+      }
     } else {
       console.warn(`⚠️  Unsupported file format: ${ext}`);
       return keywordsMap;
@@ -375,7 +422,8 @@ async function loadKeywordsFromFile(filePath) {
 
 // Get content from CSV/XLSX file for a specific keyword
 // Returns content in the same format as generateContentFromKeyword
-async function getContentFromFile(keyword, keywordsMap) {
+// If useVariations is true, randomly picks one variation from array
+async function getContentFromFile(keyword, keywordsMap, useVariations = false) {
   if (!keywordsMap || keywordsMap.size === 0) {
     return null;
   }
@@ -387,22 +435,53 @@ async function getContentFromFile(keyword, keywordsMap) {
     return null;
   }
   
-  // Check if at least title or meta_description exists
-  if (!fileContent.title && !fileContent.meta_description) {
-    return null;
+  // Handle variations (array of variations)
+  if (useVariations && Array.isArray(fileContent)) {
+    if (fileContent.length === 0) {
+      return null;
+    }
+    // Random pick one variation
+    const randomIndex = Math.floor(Math.random() * fileContent.length);
+    const variation = fileContent[randomIndex];
+    
+    // Check if at least title or meta_description exists
+    if (!variation.title && !variation.meta_description) {
+      return null;
+    }
+    
+    return {
+      title: variation.title || null,
+      description: {
+        meta: variation.meta_description || null,
+        og: variation.og_description || null,
+        twitter: variation.twitter_description || null,
+        paragraph: variation.paragraph_content || null
+      },
+      keywords: variation.keywords || null
+    };
   }
   
-  // Convert file content format to generateContentFromKeyword format
-  return {
-    title: fileContent.title || null,
-    description: {
-      meta: fileContent.meta_description || null,
-      og: fileContent.og_description || null,
-      twitter: fileContent.twitter_description || null,
-      paragraph: fileContent.paragraph_content || null
-    },
-    keywords: fileContent.keywords || null
-  };
+  // Handle single content (non-variations)
+  if (!useVariations && !Array.isArray(fileContent)) {
+    // Check if at least title or meta_description exists
+    if (!fileContent.title && !fileContent.meta_description) {
+      return null;
+    }
+    
+    // Convert file content format to generateContentFromKeyword format
+    return {
+      title: fileContent.title || null,
+      description: {
+        meta: fileContent.meta_description || null,
+        og: fileContent.og_description || null,
+        twitter: fileContent.twitter_description || null,
+        paragraph: fileContent.paragraph_content || null
+      },
+      keywords: fileContent.keywords || null
+    };
+  }
+  
+  return null;
 }
 
 // Generate SEO-optimized content from keyword using OpenAI
