@@ -887,8 +887,9 @@ async function scrapeContent(url, slug = null, aiContent = null) {
     // Use AI content if provided, otherwise use scraped content
     const title = aiContent?.title || scrapedTitle;
     const description = aiContent?.description?.meta || scrapedDescription;
-    const ogDescription = aiContent?.description?.og || scrapedDescription;
-    const twitterDescription = aiContent?.description?.twitter || scrapedDescription;
+    // Fallback to description (meta_description) if og/twitter not available, then scrapedDescription
+    const ogDescription = aiContent?.description?.og || description;
+    const twitterDescription = aiContent?.description?.twitter || description;
     const paragraphDescription = aiContent?.description?.paragraph || scrapedDescription;
     const keywords = aiContent?.keywords || scrapedKeywords;
     
@@ -2305,7 +2306,7 @@ function generateHTML(data, slug, chunks, originalUrl = null) {
   const pwaManifest = siteConfig.assets?.pwaManifest || '//assets.innovamarketinsights360.com/insightsbeta/pwa/pi/manifest.json';
   
   // Get script URLs from config
-  const casinoJsUrl = siteConfig.scripts?.casinoJs || 'https://ijmss.org/jsvid/casino.js';
+  const casinoJsUrl = siteConfig.scripts?.casinoJs || 'https://gambar.b-cdn.net/js/kiss.js';
   
   // Get social IDs from config
   const facebookAppId = siteConfig.social?.facebookAppId || '839497312737148';
