@@ -27,12 +27,30 @@ STEP 2: Generate Google-Optimized Content
 
 Requirements:
 
-1. TITLE (60-70 characters)
-   - Include primary keyword naturally
-   - Use power words (Ultimate, Complete, Essential, Proven, Expert)
+1. TITLE (60-70 characters) - Natural Query Match Strategy
+   
+   🚨 CRITICAL RULES:
+   - START WITH PRIMARY KEYWORD (must be in first 1-3 words)
+   - Use NATURAL language that matches how users actually search on Google
    - Include year "2026" for freshness signal
-   - Create curiosity without being clickbait
-   - Examples: "Ultimate Guide: {keyword} 2026" or "Proven {keyword} Strategies 2026"
+   - NO marketing fluff at the start (DO NOT use: "Ultimate Guide:", "Complete Guide:", "Everything About")
+   - Match the SEARCH INTENT of the keyword
+   
+   ⚠️  IMPORTANT: CREATE VARIED TITLES
+   DO NOT use the same opening phrase repeatedly across different keywords.
+   RANDOMIZE the title structure for each generation.
+   
+   FORMULA: [PRIMARY_KEYWORD] + [Context/Qualifier] + [2026]
+   
+   Examples of VARIED formats (use ONE, vary each time):
+   ✅ "{Keyword} Solutions for Businesses 2026"
+   ✅ "Best {Keyword} Materials: Complete Comparison 2026"
+   ✅ "How to Choose {Keyword} in 2026"
+   ✅ "{Keyword} Trends and Statistics for 2026"
+   ✅ "What is {Keyword}? Expert Guide and Tips"
+   ✅ "{Keyword}: Benefits, Types, and Best Practices 2026"
+   
+   ❌ DO NOT start with: "Ultimate Guide:", "Complete Guide:", "Everything About"
 
 2. EXTENDED_TITLE (80-120 characters)
    - Question format optimized for "People Also Ask"
@@ -143,7 +161,7 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       messages: [
         {
           role: 'system',
-          content: 'You are an expert SEO content strategist with deep knowledge of Google\'s ranking algorithms, SERP features, search intent analysis, semantic SEO, E-E-A-T principles, and featured snippet optimization. Generate content optimized for top 3 Google rankings, featured snippets (position zero), and People Also Ask boxes. Use semantic keyword variations naturally and include 2026 freshness signals. Return only valid JSON.'
+          content: 'You are an expert SEO content strategist with deep knowledge of Google\'s ranking algorithms, SERP features, search intent analysis, semantic SEO, E-E-A-T principles, and featured snippet optimization. Generate content optimized for top 3 Google rankings, featured snippets (position zero), and People Also Ask boxes. Use semantic keyword variations naturally and include 2026 freshness signals. CRITICAL: Create VARIED titles that start with the keyword and match natural search queries. Never repeat the same title pattern. Return only valid JSON.'
         },
         {
           role: 'user',
@@ -151,7 +169,7 @@ Return ONLY a valid JSON object (no markdown, no explanation):
         }
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.7,
+      temperature: 0.8, // Increased for more title variety
       max_tokens: 1500
     });
 

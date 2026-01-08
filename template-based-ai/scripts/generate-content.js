@@ -77,8 +77,11 @@ async function generateContent(keyword) {
   finalHTML = beautifyHTML(finalHTML);
   console.log('');
 
-  // Save output
-  const outputFile = path.join(OUTPUT_DIR, `${keyword.replace(/\s+/g, '-')}.html`);
+  // Save output with unique ID
+  // Generate 4-character unique ID (alphanumeric lowercase)
+  const uniqueId = Math.random().toString(36).substring(2, 6);
+  const slug = keyword.replace(/\s+/g, '-').toLowerCase();
+  const outputFile = path.join(OUTPUT_DIR, `${slug}-${uniqueId}.html`);
   fs.writeFileSync(outputFile, finalHTML, 'utf8');
 
   const totalTime = Date.now() - startLoad;
