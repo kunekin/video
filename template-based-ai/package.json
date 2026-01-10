@@ -10,9 +10,11 @@
     "test": "node scripts/test-generation.js",
     "test-gsc": "node scripts/test-gsc-inspection.js",
     "check-gsc-setup": "node scripts/check-gsc-setup.js",
-    "enable-gsc-api": "node scripts/enable-gsc-api.js"
+    "enable-gsc-api": "node scripts/enable-gsc-api.js",
+    "verify-s3": "node scripts/verify-s3-setup.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.966.0",
     "axios": "^1.6.0",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.4.5",

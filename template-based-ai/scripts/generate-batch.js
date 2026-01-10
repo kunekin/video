@@ -20,6 +20,8 @@ import {
   replaceRelatedVideos,
   removeBannerAds
 } from '../lib/html-utils.js';
+import { uploadHTMLToS3, uploadSitemapToS3 } from '../lib/s3-utils.js';
+import { addToSitemap, getSitemapPath } from '../lib/sitemap-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -94,6 +96,7 @@ async function generateBatch(mainKeyword) {
 
   const startTime = Date.now();
   const results = [];
+  const sitemapEntries = []; // Track URLs for sitemap
 
   // Step 1: Generate main keyword file
   console.log('📄 Step 1: Generating main keyword file...');
@@ -101,11 +104,31 @@ async function generateBatch(mainKeyword) {
   const mainStart = Date.now();
   const mainResult = await generateContent(mainKeyword);
   const mainTime = Date.now() - mainStart;
+  
+  // Upload to S3
+  let s3Url = null;
+  try {
+    console.log(`   ☁️  Uploading to S3...`);
+    s3Url = await uploadHTMLToS3(mainResult.outputFile);
+    console.log(`   ✅ Uploaded to S3: ${s3Url}`);
+  } catch (error) {
+    console.error(`   ⚠️  S3 upload failed: ${error.message}`);
+  }
+  
+  // Track for sitemap
+  if (s3Url) {
+    sitemapEntries.push({
+      loc: s3Url,
+      lastmod: new Date().toISOString().split('T')[0]
+    });
+  }
+  
   results.push({
     keyword: mainKeyword,
     file: path.basename(mainResult.outputFile),
     time: mainTime,
-    type: 'main'
+    type: 'main',
+    s3Url: s3Url
   });
   console.log(`   ✅ Generated: ${path.basename(mainResult.outputFile)} (${(mainTime / 1000).toFixed(1)}s)`);
   console.log('');
@@ -140,9 +163,28 @@ async function generateBatch(mainKeyword) {
   if (allKeywords.length === 0) {
     console.log('⚠️  No additional keywords found. Only main keyword file generated.');
     console.log('');
+    
+    // Update sitemap and upload
+    if (sitemapEntries.length > 0) {
+      console.log('🗺️  Updating sitemap...');
+      try {
+        const totalUrls = await addToSitemap(sitemapEntries);
+        console.log(`   ✅ Sitemap updated: ${totalUrls} total URLs`);
+        
+        // Upload sitemap to S3
+        console.log(`   ☁️  Uploading sitemap to S3...`);
+        const sitemapS3Url = await uploadSitemapToS3(getSitemapPath());
+        console.log(`   ✅ Sitemap uploaded: ${sitemapS3Url}`);
+      } catch (error) {
+        console.error(`   ⚠️  Sitemap update failed: ${error.message}`);
+      }
+    }
+    
     const totalTime = Date.now() - startTime;
+    console.log('');
     console.log('📊 Summary:');
     console.log(`   Files generated: 1`);
+    console.log(`   Files uploaded to S3: ${sitemapEntries.length}`);
     console.log(`   Total time: ${(totalTime / 1000).toFixed(1)}s`);
     return;
   }
@@ -159,11 +201,31 @@ async function generateBatch(mainKeyword) {
     try {
       const result = await generateContent(keyword);
       const keywordTime = Date.now() - keywordStart;
+      
+      // Upload to S3
+      let s3Url = null;
+      try {
+        console.log(`      ☁️  Uploading to S3...`);
+        s3Url = await uploadHTMLToS3(result.outputFile);
+        console.log(`      ✅ Uploaded to S3: ${s3Url}`);
+      } catch (error) {
+        console.error(`      ⚠️  S3 upload failed: ${error.message}`);
+      }
+      
+      // Track for sitemap
+      if (s3Url) {
+        sitemapEntries.push({
+          loc: s3Url,
+          lastmod: new Date().toISOString().split('T')[0]
+        });
+      }
+      
       results.push({
         keyword,
         file: path.basename(result.outputFile),
         time: keywordTime,
-        type
+        type,
+        s3Url: s3Url
       });
       console.log(`      ✅ Generated: ${path.basename(result.outputFile)} (${(keywordTime / 1000).toFixed(1)}s)`);
     } catch (error) {
@@ -180,16 +242,35 @@ async function generateBatch(mainKeyword) {
 
   console.log('');
 
+  // Update sitemap and upload
+  if (sitemapEntries.length > 0) {
+    console.log('🗺️  Updating sitemap...');
+    try {
+      const totalUrls = await addToSitemap(sitemapEntries);
+      console.log(`   ✅ Sitemap updated: ${totalUrls} total URLs`);
+      
+      // Upload sitemap to S3
+      console.log(`   ☁️  Uploading sitemap to S3...`);
+      const sitemapS3Url = await uploadSitemapToS3(getSitemapPath());
+      console.log(`   ✅ Sitemap uploaded: ${sitemapS3Url}`);
+    } catch (error) {
+      console.error(`   ⚠️  Sitemap update failed: ${error.message}`);
+    }
+    console.log('');
+  }
+
   // Summary
   const totalTime = Date.now() - startTime;
   const successCount = results.filter(r => r.file !== null).length;
   const errorCount = results.filter(r => r.error).length;
+  const uploadedCount = results.filter(r => r.s3Url).length;
 
   console.log('📊 Summary:');
   console.log('=====================================');
   console.log(`   Main keyword: "${mainKeyword}"`);
   console.log(`   Total keywords: ${allKeywords.length + 1}`);
   console.log(`   Files generated: ${successCount}`);
+  console.log(`   Files uploaded to S3: ${uploadedCount}`);
   console.log(`   Errors: ${errorCount}`);
   console.log(`   Total time: ${(totalTime / 1000).toFixed(1)}s (~${(totalTime / 60000).toFixed(1)}min)`);
   console.log('');
@@ -201,6 +282,9 @@ async function generateBatch(mainKeyword) {
       console.log(`   ${index + 1}. ${result.file}`);
       console.log(`      Keyword: "${result.keyword}" (${result.type})`);
       console.log(`      Time: ${(result.time / 1000).toFixed(1)}s`);
+      if (result.s3Url) {
+        console.log(`      S3 URL: ${result.s3Url}`);
+      }
     } else {
       console.log(`   ${index + 1}. ❌ Failed: "${result.keyword}"`);
       console.log(`      Error: ${result.error}`);
