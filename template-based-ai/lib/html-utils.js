@@ -113,7 +113,8 @@ export function replaceContentInHTML(html, aiContent, canonicalUrl, ogUrl, embed
         `$1${escapedDescription}$2`
       );
       
-      // Replace VideoObject embedUrl with embedUrlBase or canonicalUrl
+      // Replace VideoObject embedUrl: prefer embedUrlBase if set, otherwise use canonicalUrl (which already prefers Bunny)
+      // Note: embedUrlBase takes precedence if set, but canonicalUrl now uses Bunny if configured
       const embedUrl = embedUrlBase ? `${embedUrlBase}/${canonicalUrl.split('/').pop()}` : canonicalUrl;
       if (embedUrl) {
         const escapedEmbedUrl = embedUrl.replace(/"/g, '\\"').replace(/'/g, "\\'");
@@ -199,16 +200,17 @@ export function replaceDatesInHTML(html) {
   const today = new Date();
   const todayISO = today.toISOString().split('T')[0]; // YYYY-MM-DD
   const todayISOFull = today.toISOString(); // YYYY-MM-DDTHH:mm:ss.sssZ
+  const todayISOWithoutTZ = today.toISOString().replace(/\.\d{3}Z$/, '').replace(/Z$/, ''); // YYYY-MM-DDTHH:mm:ss (tanpa timezone)
   const todayDDMMMYYYY = today
     .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     .replace(/ /g, ' ');
 
   let modifiedHTML = html;
 
-  // Replace JSON-LD Schema Dates
+  // Replace JSON-LD Schema Dates (tanpa timezone untuk selalu terlihat fresh)
   modifiedHTML = modifiedHTML.replace(
-    /("uploadDate"|"datePublished"|"dateModified"|"dateCreated"):\s*"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))"/g,
-    `$1: "${todayISOFull}"`
+    /("uploadDate"|"datePublished"|"dateModified"|"dateCreated"):\s*"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d{3})?(Z|[+-]\d{2}:\d{2})?"/g,
+    `$1: "${todayISOWithoutTZ}"`
   );
 
   // Replace Meta Tags Dates

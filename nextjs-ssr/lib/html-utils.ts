@@ -362,6 +362,7 @@ export function replaceDatesInHTML(html: string): string {
   const today = new Date();
   const todayISO = today.toISOString().split('T')[0]; // YYYY-MM-DD
   const todayISOFull = today.toISOString(); // YYYY-MM-DDTHH:mm:ss.sssZ
+  const todayISOWithoutTZ = today.toISOString().replace(/\.\d{3}Z$/, '').replace(/Z$/, ''); // YYYY-MM-DDTHH:mm:ss (tanpa timezone)
   const todayDDMMMYYYY = today
     .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     .replace(/ /g, ' '); // 07 Jan 2026
@@ -371,10 +372,10 @@ export function replaceDatesInHTML(html: string): string {
 
   let modifiedHTML = html;
 
-  // 1. JSON-LD Schema Dates
+  // 1. JSON-LD Schema Dates (tanpa timezone untuk selalu terlihat fresh)
   modifiedHTML = modifiedHTML.replace(
-    /("uploadDate"|"datePublished"|"dateModified"|"dateCreated"):\s*"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))"/g,
-    `$1: "${todayISOFull}"`
+    /("uploadDate"|"datePublished"|"dateModified"|"dateCreated"):\s*"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d{3})?(Z|[+-]\d{2}:\d{2})?"/g,
+    `$1: "${todayISOWithoutTZ}"`
   );
 
   // 2. Meta Tags Dates
