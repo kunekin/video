@@ -444,6 +444,14 @@ export function replaceRelatedVideos(html, aiContent) {
         timeElement.text(video.duration);
       }
       
+      // Replace image alt text with video title (for SEO)
+      const imageElement = $(element).find('img.rec-size');
+      if (imageElement.length > 0 && video.title) {
+        imageElement.attr('alt', video.title);
+        // Also update title attribute for consistency
+        imageElement.attr('title', video.title);
+      }
+      
       // KEEP href (URL from template will be preserved)
       // href is kept to allow links to work (absolute URLs preserved by convertToRelativePaths)
       // Remove pointer-events and cursor styling if you want links to be clickable
@@ -457,7 +465,9 @@ export function replaceRelatedVideos(html, aiContent) {
     }
   });
   
-  console.log(`✅ Replaced ${replacedCount} related videos with AI content`);
+  if (replacedCount > 0) {
+    console.log(`✅ Replaced ${replacedCount} related videos with AI content (including alt text)`);
+  }
   return $.html();
 }
 
