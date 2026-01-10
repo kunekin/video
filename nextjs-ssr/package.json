@@ -1,0 +1,30 @@
+{
+  "name": "nextjs-ssr-ai-content",
+  "version": "1.0.0",
+  "description": "Next.js SSR implementation for AI-generated content with SEO optimization",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.6.1",
+    "next": "^14.2.0",
+    "openai": "^6.15.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "devDependencies": {
+    "@types/cheerio": "^0.22.35",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.0",
+    "typescript": "^5.5.0"
+  }
+}

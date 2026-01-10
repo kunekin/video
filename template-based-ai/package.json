@@ -1,0 +1,26 @@
+{
+  "name": "template-based-ai-content",
+  "version": "1.0.0",
+  "description": "Template-based AI content generation with single HTML template",
+  "type": "module",
+  "scripts": {
+    "fetch-template": "node scripts/fetch-template.js",
+    "generate": "node scripts/generate-content.js",
+    "test": "node scripts/test-generation.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.4.5",
+    "openai": "^4.63.0"
+  },
+  "devDependencies": {},
+  "keywords": [
+    "ai",
+    "content",
+    "seo",
+    "template"
+  ],
+  "author": "",
+  "license": "ISC"
+}
