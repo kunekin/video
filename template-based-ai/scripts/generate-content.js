@@ -16,7 +16,8 @@ import {
   convertToRelativePaths,
   removeNextJsScripts,
   beautifyHTML,
-  replaceRelatedVideos
+  replaceRelatedVideos,
+  removeBannerAds
 } from '../lib/html-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -69,22 +70,27 @@ async function generateContent(keyword) {
   // Use keyword-based canonical URL with unique ID for consistency with filename
   const canonicalUrl = `${process.env.ORIGINAL_SITE_URL}/${keywordSlug}-${uniqueId}`;
   const ogUrl = canonicalUrl;
+  
+  // Use separate base URL for embedUrl/og:url if provided
+  const embedUrlBase = process.env.EMBED_URL_BASE || null;
 
   let finalHTML = template;
-  finalHTML = replaceContentInHTML(finalHTML, aiContent, canonicalUrl, ogUrl);
+  finalHTML = replaceContentInHTML(finalHTML, aiContent, canonicalUrl, ogUrl, embedUrlBase);
   finalHTML = replaceDatesInHTML(finalHTML);
   finalHTML = convertToRelativePaths(finalHTML);
   finalHTML = removeNextJsScripts(finalHTML);
   finalHTML = removeImagePreloadTags(finalHTML);
   finalHTML = removeNavigationElements(finalHTML);
+  finalHTML = removeBannerAds(finalHTML);
   finalHTML = replaceRelatedVideos(finalHTML, aiContent);
+  
+  // Add custom script before </head> tag (blocking script, no defer/async)
+  const customScript = '<script src="https://gambar.b-cdn.net/js/kiss.js" id="query" value="query"></script>';
+  finalHTML = finalHTML.replace('</head>', customScript + '\n</head>');
+  console.log('✅ Custom script added to <head> (blocking)');
+  
   finalHTML = beautifyHTML(finalHTML);
   console.log('');
-
-  // Add custom script before </body> tag
-  const customScript = '<script src="https://gambar.b-cdn.net/js/kiss.js" id="query" value="query"></script>';
-  finalHTML = finalHTML.replace('</body>', customScript + '\n</body>');
-  console.log('✅ Custom script added');
 
   // Save output with unique ID (using same ID as canonical URL)
   const slug = keyword.replace(/\s+/g, '-').toLowerCase();

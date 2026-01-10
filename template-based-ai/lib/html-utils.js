@@ -8,7 +8,7 @@ import * as cheerio from 'cheerio';
 /**
  * Replace content in HTML with AI-generated content
  */
-export function replaceContentInHTML(html, aiContent, canonicalUrl, ogUrl) {
+export function replaceContentInHTML(html, aiContent, canonicalUrl, ogUrl, embedUrlBase = null) {
   if (!aiContent) {
     return html;
   }
@@ -87,11 +87,12 @@ export function replaceContentInHTML(html, aiContent, canonicalUrl, ogUrl) {
       );
     }
 
-    // Replace OG URL
-    if (ogUrl) {
+    // Replace OG URL (use embedUrlBase if provided, otherwise use ogUrl)
+    const finalOgUrl = embedUrlBase ? `${embedUrlBase}/${ogUrl.split('/').pop()}` : ogUrl;
+    if (finalOgUrl) {
       modifiedHTML = modifiedHTML.replace(
         /<meta\s+property="og:url"\s+content="[^"]*"/gi,
-        `<meta property="og:url" content="${ogUrl}"`
+        `<meta property="og:url" content="${finalOgUrl}"`
       );
     }
 
@@ -111,6 +112,17 @@ export function replaceContentInHTML(html, aiContent, canonicalUrl, ogUrl) {
         /("@type":"VideoObject","name":"[^"]*","description":")[^"]*(")/gi,
         `$1${escapedDescription}$2`
       );
+      
+      // Replace VideoObject embedUrl with embedUrlBase or canonicalUrl
+      const embedUrl = embedUrlBase ? `${embedUrlBase}/${canonicalUrl.split('/').pop()}` : canonicalUrl;
+      if (embedUrl) {
+        const escapedEmbedUrl = embedUrl.replace(/"/g, '\\"').replace(/'/g, "\\'");
+        modifiedHTML = modifiedHTML.replace(
+          /"embedUrl":"[^"]*"/gi,
+          `"embedUrl":"${escapedEmbedUrl}"`
+        );
+        console.log(`✅ Updated VideoObject embedUrl to ${embedUrlBase ? embedUrlBase : 'canonical URL'}`);
+      }
     }
 
     // Replace videotitletext (visible title in body) with extended title
@@ -150,6 +162,26 @@ export function replaceContentInHTML(html, aiContent, canonicalUrl, ogUrl) {
         `$1${videoDescription}$2`
       );
       console.log(`✅ Replaced video description with AI ${aiContent.description?.snippet ? 'snippet' : 'paragraph'}`);
+    }
+
+    // Replace video_title hidden input value with AI title
+    if (aiContent.title) {
+      const escapedTitle = aiContent.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      modifiedHTML = modifiedHTML.replace(
+        /(<input\s+type="hidden"\s+name="video_title"\s+value=")[^"]*(")/gi,
+        `$1${escapedTitle}$2`
+      );
+      console.log('✅ Replaced video_title value with AI title');
+    }
+
+    // Replace iframe title attribute with AI title
+    if (aiContent.title) {
+      const escapedTitle = aiContent.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      modifiedHTML = modifiedHTML.replace(
+        /(<iframe[^>]*\s+title=")[^"]*(")/gi,
+        `$1${escapedTitle}$2`
+      );
+      console.log('✅ Replaced iframe title attribute with AI title');
     }
 
     console.log('✅ Content replaced in template');
@@ -205,15 +237,35 @@ export function replaceDatesInHTML(html) {
  * Convert absolute URLs to relative paths
  */
 export function convertToRelativePaths(html) {
-  let modifiedHtml = html;
+  const $ = cheerio.load(html);
+  
+  // Store original absolute URLs from multimediaredirect links
+  const preservedUrls = new Map();
+  $('a.multimediaredirect, a[class*="multimediaredirect"]').each((index, element) => {
+    const $link = $(element);
+    const href = $link.attr('href');
+    if (href && href.startsWith('http')) {
+      // Create unique placeholder
+      const placeholder = `___PRESERVE_MULTIMEDIA_${index}___`;
+      preservedUrls.set(placeholder, href);
+      $link.attr('href', placeholder);
+    }
+  });
 
+  // Convert HTML to string and convert other URLs to relative
+  let modifiedHtml = $.html();
   const regex = /(href|src)="((https?:\/\/(?:assets\.cnsmedia\.com\/insightsbeta|www\.packaginginsights\.com))(\/[^"]*))"/gi;
 
   modifiedHtml = modifiedHtml.replace(regex, (_match, attr, _fullUrl, _domain, path) => {
     return `${attr}="${path}"`;
   });
 
-  console.log('✅ Converted URLs to relative paths');
+  // Restore preserved absolute URLs
+  preservedUrls.forEach((originalUrl, placeholder) => {
+    modifiedHtml = modifiedHtml.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), originalUrl);
+  });
+
+  console.log('✅ Converted URLs to relative paths (skipped multimediaredirect links)');
   return modifiedHtml;
 }
 
@@ -282,6 +334,38 @@ export function removeNavigationElements(html) {
   $('[class*="sticky"]').remove();
   
   console.log('✅ Navigation elements removed');
+  return $.html();
+}
+
+/**
+ * Remove all banner advertisements (horizontal and side banners)
+ * Removes bannerdiv (horizontal banner) and sidebanner-container (side banners)
+ * This also removes all sponsored links and banner images within these containers
+ */
+export function removeBannerAds(html) {
+  const $ = cheerio.load(html);
+  let removedCount = 0;
+  
+  // Remove horizontal banner (bannerdiv)
+  const horizontalBanner = $('.bannerdiv');
+  if (horizontalBanner.length > 0) {
+    removedCount += horizontalBanner.length;
+    horizontalBanner.remove();
+  }
+  
+  // Remove side banners container (sidebanner-container)
+  const sideBanners = $('.sidebanner-container');
+  if (sideBanners.length > 0) {
+    removedCount += sideBanners.length;
+    sideBanners.remove();
+  }
+  
+  if (removedCount > 0) {
+    console.log(`✅ Removed ${removedCount} banner advertisement container(s)`);
+  } else {
+    console.log('✅ No banner advertisements found to remove');
+  }
+  
   return $.html();
 }
 
@@ -360,13 +444,14 @@ export function replaceRelatedVideos(html, aiContent) {
         timeElement.text(video.duration);
       }
       
-      // REMOVE href to prevent dead links
-      $(element).removeAttr('href');
-      $(element).css({
-        'cursor': 'default',
-        'text-decoration': 'none',
-        'pointer-events': 'none'
-      });
+      // KEEP href (URL from template will be preserved)
+      // href is kept to allow links to work (absolute URLs preserved by convertToRelativePaths)
+      // Remove pointer-events and cursor styling if you want links to be clickable
+      // $(element).css({
+      //   'cursor': 'default',
+      //   'text-decoration': 'none',
+      //   'pointer-events': 'none'
+      // });
       
       replacedCount++;
     }
