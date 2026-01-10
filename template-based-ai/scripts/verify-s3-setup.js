@@ -75,12 +75,37 @@ optionalVars.forEach(varName => {
   }
 });
 
+// Check Google Indexing API configuration
+console.log('');
+console.log('📋 Google Indexing API Configuration:');
+const indexingEnabled = process.env.GOOGLE_INDEXING_ENABLED === 'true';
+const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+
+if (indexingEnabled) {
+  console.log(`   ✅ GOOGLE_INDEXING_ENABLED: true`);
+  if (serviceAccountKey) {
+    const keyPath = path.isAbsolute(serviceAccountKey)
+      ? serviceAccountKey
+      : path.resolve(__dirname, '..', serviceAccountKey);
+    if (fs.existsSync(keyPath)) {
+      console.log(`   ✅ GOOGLE_SERVICE_ACCOUNT_KEY: ${serviceAccountKey} (file exists)`);
+    } else {
+      console.log(`   ⚠️  GOOGLE_SERVICE_ACCOUNT_KEY: ${serviceAccountKey} (file not found)`);
+    }
+  } else {
+    console.log(`   ⚠️  GOOGLE_SERVICE_ACCOUNT_KEY: Not set (Indexing API will be skipped)`);
+  }
+} else {
+  console.log(`   ℹ️  GOOGLE_INDEXING_ENABLED: false or not set (Indexing API disabled)`);
+}
+
 // Check if utility files exist
 console.log('');
 console.log('📁 Utility Files:');
 const utilityFiles = [
   '../lib/s3-utils.js',
-  '../lib/sitemap-utils.js'
+  '../lib/sitemap-utils.js',
+  '../lib/indexing-api.js'
 ];
 
 utilityFiles.forEach(relativePath => {

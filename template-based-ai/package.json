@@ -9,6 +9,7 @@
     "generate-batch": "node scripts/generate-batch.js",
     "test": "node scripts/test-generation.js",
     "test-gsc": "node scripts/test-gsc-inspection.js",
+    "test-indexing": "node scripts/test-indexing-api.js",
     "check-gsc-setup": "node scripts/check-gsc-setup.js",
     "enable-gsc-api": "node scripts/enable-gsc-api.js",
     "verify-s3": "node scripts/verify-s3-setup.js"

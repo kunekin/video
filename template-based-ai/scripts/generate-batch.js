@@ -22,6 +22,7 @@ import {
 } from '../lib/html-utils.js';
 import { uploadHTMLToS3, uploadSitemapToS3 } from '../lib/s3-utils.js';
 import { addToSitemap, getSitemapPath } from '../lib/sitemap-utils.js';
+import { requestIndexing } from '../lib/indexing-api.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -113,6 +114,17 @@ async function generateBatch(mainKeyword) {
     console.log(`   ✅ Uploaded to S3: ${s3Url}`);
   } catch (error) {
     console.error(`   ⚠️  S3 upload failed: ${error.message}`);
+  }
+  
+  // Request Google Indexing (if enabled)
+  if (s3Url && process.env.GOOGLE_INDEXING_ENABLED === 'true' && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+    try {
+      console.log(`   🔍 Requesting Google indexing...`);
+      await requestIndexing(s3Url, process.env.GOOGLE_SERVICE_ACCOUNT_KEY, 'URL_UPDATED');
+      console.log(`   ✅ Indexing requested: ${s3Url}`);
+    } catch (error) {
+      console.error(`   ⚠️  Indexing request failed: ${error.message}`);
+    }
   }
   
   // Track for sitemap
@@ -210,6 +222,19 @@ async function generateBatch(mainKeyword) {
         console.log(`      ✅ Uploaded to S3: ${s3Url}`);
       } catch (error) {
         console.error(`      ⚠️  S3 upload failed: ${error.message}`);
+      }
+      
+      // Request Google Indexing (if enabled)
+      if (s3Url && process.env.GOOGLE_INDEXING_ENABLED === 'true' && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+        try {
+          console.log(`      🔍 Requesting Google indexing...`);
+          await requestIndexing(s3Url, process.env.GOOGLE_SERVICE_ACCOUNT_KEY, 'URL_UPDATED');
+          console.log(`      ✅ Indexing requested: ${s3Url}`);
+          // Add small delay to avoid rate limiting (200 requests/day limit)
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error(`      ⚠️  Indexing request failed: ${error.message}`);
+        }
       }
       
       // Track for sitemap
