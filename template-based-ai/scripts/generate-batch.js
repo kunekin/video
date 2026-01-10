@@ -21,6 +21,7 @@ import {
   removeBannerAds
 } from '../lib/html-utils.js';
 import { uploadHTMLToS3, uploadSitemapToS3 } from '../lib/s3-utils.js';
+import { uploadHTMLToBunny, uploadSitemapToBunny } from '../lib/bunny-utils.js';
 import { addToSitemap, getSitemapPath } from '../lib/sitemap-utils.js';
 import { requestIndexing } from '../lib/indexing-api.js';
 
@@ -116,21 +117,35 @@ async function generateBatch(mainKeyword) {
     console.error(`   ⚠️  S3 upload failed: ${error.message}`);
   }
   
-  // Request Google Indexing (if enabled)
-  if (s3Url && process.env.GOOGLE_INDEXING_ENABLED === 'true' && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+  // Upload to Bunny CDN (if enabled)
+  let bunnyUrl = null;
+  if (process.env.BUNNY_STORAGE_ZONE_NAME && process.env.BUNNY_ACCESS_KEY) {
+    try {
+      console.log(`   🐰 Uploading to Bunny CDN...`);
+      bunnyUrl = await uploadHTMLToBunny(mainResult.outputFile);
+      console.log(`   ✅ Uploaded to Bunny CDN: ${bunnyUrl}`);
+    } catch (error) {
+      console.error(`   ⚠️  Bunny CDN upload failed: ${error.message}`);
+    }
+  }
+  
+  // Request Google Indexing (if enabled) - use S3 URL if available, otherwise Bunny URL
+  const indexingUrl = s3Url || bunnyUrl;
+  if (indexingUrl && process.env.GOOGLE_INDEXING_ENABLED === 'true' && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
     try {
       console.log(`   🔍 Requesting Google indexing...`);
-      await requestIndexing(s3Url, process.env.GOOGLE_SERVICE_ACCOUNT_KEY, 'URL_UPDATED');
-      console.log(`   ✅ Indexing requested: ${s3Url}`);
+      await requestIndexing(indexingUrl, process.env.GOOGLE_SERVICE_ACCOUNT_KEY, 'URL_UPDATED');
+      console.log(`   ✅ Indexing requested: ${indexingUrl}`);
     } catch (error) {
       console.error(`   ⚠️  Indexing request failed: ${error.message}`);
     }
   }
   
-  // Track for sitemap
-  if (s3Url) {
+  // Track for sitemap (prefer S3 URL, fallback to Bunny URL)
+  const sitemapUrl = s3Url || bunnyUrl;
+  if (sitemapUrl) {
     sitemapEntries.push({
-      loc: s3Url,
+      loc: sitemapUrl,
       lastmod: new Date().toISOString().split('T')[0]
     });
   }
@@ -183,10 +198,25 @@ async function generateBatch(mainKeyword) {
         const totalUrls = await addToSitemap(sitemapEntries);
         console.log(`   ✅ Sitemap updated: ${totalUrls} total URLs`);
         
-        // Upload sitemap to S3
-        console.log(`   ☁️  Uploading sitemap to S3...`);
-        const sitemapS3Url = await uploadSitemapToS3(getSitemapPath());
-        console.log(`   ✅ Sitemap uploaded: ${sitemapS3Url}`);
+        // Upload sitemap to S3 (separate try-catch so Bunny CDN upload still runs if S3 fails)
+        try {
+          console.log(`   ☁️  Uploading sitemap to S3...`);
+          const sitemapS3Url = await uploadSitemapToS3(getSitemapPath());
+          console.log(`   ✅ Sitemap uploaded: ${sitemapS3Url}`);
+        } catch (error) {
+          console.error(`   ⚠️  S3 sitemap upload failed: ${error.message}`);
+        }
+        
+        // Upload sitemap to Bunny CDN (if enabled, separate try-catch so it runs independently)
+        if (process.env.BUNNY_STORAGE_ZONE_NAME && process.env.BUNNY_ACCESS_KEY) {
+          try {
+            console.log(`   🐰 Uploading sitemap to Bunny CDN...`);
+            const sitemapBunnyUrl = await uploadSitemapToBunny(getSitemapPath());
+            console.log(`   ✅ Sitemap uploaded to Bunny CDN: ${sitemapBunnyUrl}`);
+          } catch (error) {
+            console.error(`   ⚠️  Bunny CDN sitemap upload failed: ${error.message}`);
+          }
+        }
       } catch (error) {
         console.error(`   ⚠️  Sitemap update failed: ${error.message}`);
       }
@@ -224,12 +254,25 @@ async function generateBatch(mainKeyword) {
         console.error(`      ⚠️  S3 upload failed: ${error.message}`);
       }
       
-      // Request Google Indexing (if enabled)
-      if (s3Url && process.env.GOOGLE_INDEXING_ENABLED === 'true' && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+      // Upload to Bunny CDN (if enabled)
+      let bunnyUrl = null;
+      if (process.env.BUNNY_STORAGE_ZONE_NAME && process.env.BUNNY_ACCESS_KEY) {
+        try {
+          console.log(`      🐰 Uploading to Bunny CDN...`);
+          bunnyUrl = await uploadHTMLToBunny(result.outputFile);
+          console.log(`      ✅ Uploaded to Bunny CDN: ${bunnyUrl}`);
+        } catch (error) {
+          console.error(`      ⚠️  Bunny CDN upload failed: ${error.message}`);
+        }
+      }
+      
+      // Request Google Indexing (if enabled) - use S3 URL if available, otherwise Bunny URL
+      const indexingUrl = s3Url || bunnyUrl;
+      if (indexingUrl && process.env.GOOGLE_INDEXING_ENABLED === 'true' && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
         try {
           console.log(`      🔍 Requesting Google indexing...`);
-          await requestIndexing(s3Url, process.env.GOOGLE_SERVICE_ACCOUNT_KEY, 'URL_UPDATED');
-          console.log(`      ✅ Indexing requested: ${s3Url}`);
+          await requestIndexing(indexingUrl, process.env.GOOGLE_SERVICE_ACCOUNT_KEY, 'URL_UPDATED');
+          console.log(`      ✅ Indexing requested: ${indexingUrl}`);
           // Add small delay to avoid rate limiting (200 requests/day limit)
           await new Promise(resolve => setTimeout(resolve, 500));
         } catch (error) {
@@ -237,10 +280,11 @@ async function generateBatch(mainKeyword) {
         }
       }
       
-      // Track for sitemap
-      if (s3Url) {
+      // Track for sitemap (prefer S3 URL, fallback to Bunny URL)
+      const sitemapUrl = s3Url || bunnyUrl;
+      if (sitemapUrl) {
         sitemapEntries.push({
-          loc: s3Url,
+          loc: sitemapUrl,
           lastmod: new Date().toISOString().split('T')[0]
         });
       }
@@ -274,10 +318,25 @@ async function generateBatch(mainKeyword) {
       const totalUrls = await addToSitemap(sitemapEntries);
       console.log(`   ✅ Sitemap updated: ${totalUrls} total URLs`);
       
-      // Upload sitemap to S3
-      console.log(`   ☁️  Uploading sitemap to S3...`);
-      const sitemapS3Url = await uploadSitemapToS3(getSitemapPath());
-      console.log(`   ✅ Sitemap uploaded: ${sitemapS3Url}`);
+      // Upload sitemap to S3 (separate try-catch so Bunny CDN upload still runs if S3 fails)
+      try {
+        console.log(`   ☁️  Uploading sitemap to S3...`);
+        const sitemapS3Url = await uploadSitemapToS3(getSitemapPath());
+        console.log(`   ✅ Sitemap uploaded: ${sitemapS3Url}`);
+      } catch (error) {
+        console.error(`   ⚠️  S3 sitemap upload failed: ${error.message}`);
+      }
+      
+      // Upload sitemap to Bunny CDN (if enabled, separate try-catch so it runs independently)
+      if (process.env.BUNNY_STORAGE_ZONE_NAME && process.env.BUNNY_ACCESS_KEY) {
+        try {
+          console.log(`   🐰 Uploading sitemap to Bunny CDN...`);
+          const sitemapBunnyUrl = await uploadSitemapToBunny(getSitemapPath());
+          console.log(`   ✅ Sitemap uploaded to Bunny CDN: ${sitemapBunnyUrl}`);
+        } catch (error) {
+          console.error(`   ⚠️  Bunny CDN sitemap upload failed: ${error.message}`);
+        }
+      }
     } catch (error) {
       console.error(`   ⚠️  Sitemap update failed: ${error.message}`);
     }

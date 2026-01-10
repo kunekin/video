@@ -75,6 +75,38 @@ optionalVars.forEach(varName => {
   }
 });
 
+// Check Bunny CDN configuration
+console.log('');
+console.log('📋 Bunny CDN Configuration:');
+const bunnyStorageZone = process.env.BUNNY_STORAGE_ZONE_NAME;
+const bunnyAccessKey = process.env.BUNNY_ACCESS_KEY;
+const bunnyRegion = process.env.BUNNY_REGION;
+const bunnyPullZone = process.env.BUNNY_PULL_ZONE_URL;
+
+if (bunnyStorageZone && bunnyAccessKey) {
+  console.log(`   ✅ BUNNY_STORAGE_ZONE_NAME: ${bunnyStorageZone}`);
+  const displayKey = '***' + bunnyAccessKey.slice(-4);
+  console.log(`   ✅ BUNNY_ACCESS_KEY: ${displayKey}`);
+  if (bunnyRegion) {
+    console.log(`   ✅ BUNNY_REGION: ${bunnyRegion}`);
+  } else {
+    console.log(`   ⚠️  BUNNY_REGION: Not set (will use default: ny)`);
+  }
+  if (bunnyPullZone) {
+    console.log(`   ✅ BUNNY_PULL_ZONE_URL: ${bunnyPullZone}`);
+  } else {
+    console.log(`   ⚠️  BUNNY_PULL_ZONE_URL: Not set (will use storage zone URL)`);
+  }
+} else {
+  console.log(`   ℹ️  Bunny CDN: Not configured (optional)`);
+  if (!bunnyStorageZone) {
+    console.log(`      BUNNY_STORAGE_ZONE_NAME: Not set`);
+  }
+  if (!bunnyAccessKey) {
+    console.log(`      BUNNY_ACCESS_KEY: Not set`);
+  }
+}
+
 // Check Google Indexing API configuration
 console.log('');
 console.log('📋 Google Indexing API Configuration:');
@@ -104,6 +136,7 @@ console.log('');
 console.log('📁 Utility Files:');
 const utilityFiles = [
   '../lib/s3-utils.js',
+  '../lib/bunny-utils.js',
   '../lib/sitemap-utils.js',
   '../lib/indexing-api.js'
 ];

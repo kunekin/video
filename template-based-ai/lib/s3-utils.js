@@ -85,9 +85,44 @@ export async function uploadHTMLToS3(filePath) {
 
 /**
  * Upload sitemap.xml to S3
+ * Always uploads to root, ignoring S3_PATH_PREFIX
  * @param {string} filePath - Local sitemap.xml file path
  * @returns {Promise<string>} - Public URL of uploaded sitemap
  */
 export async function uploadSitemapToS3(filePath) {
-  return uploadToS3(filePath, 'sitemap.xml', 'application/xml');
+  if (!BUCKET_NAME) {
+    throw new Error('S3_BUCKET_NAME is not configured in .env file');
+  }
+
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`);
+  }
+
+  // Sitemap always goes to root, ignore PATH_PREFIX
+  const s3Key = 'sitemap.xml';
+
+  // Read file content
+  const fileContent = fs.readFileSync(filePath);
+
+  // Prepare upload command
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: s3Key,
+    Body: fileContent,
+    ContentType: 'application/xml',
+    CacheControl: 'public, max-age=86400', // Cache for 24 hours
+  });
+
+  try {
+    // Upload to S3
+    await s3Client.send(command);
+
+    // Construct public URL (always at root)
+    const baseUrl = process.env.S3_BUCKET_URL || `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com`;
+    const publicUrl = `${baseUrl}/${s3Key}`;
+
+    return publicUrl;
+  } catch (error) {
+    throw new Error(`Failed to upload sitemap to S3: ${error.message}`);
+  }
 }
