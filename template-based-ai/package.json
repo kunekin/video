@@ -6,15 +6,19 @@
   "scripts": {
     "fetch-template": "node scripts/fetch-template.js",
     "generate": "node scripts/generate-content.js",
-    "test": "node scripts/test-generation.js"
+    "generate-batch": "node scripts/generate-batch.js",
+    "test": "node scripts/test-generation.js",
+    "test-gsc": "node scripts/test-gsc-inspection.js",
+    "check-gsc-setup": "node scripts/check-gsc-setup.js",
+    "enable-gsc-api": "node scripts/enable-gsc-api.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.4.5",
+    "googleapis": "^170.0.0",
     "openai": "^4.63.0"
   },
-  "devDependencies": {},
   "keywords": [
     "ai",
     "content",
