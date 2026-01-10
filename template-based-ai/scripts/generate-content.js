@@ -61,9 +61,13 @@ async function generateContent(keyword) {
 
   // Process template (same as Next.js SSR)
   console.log('🔄 Processing template...');
-  // Use keyword-based canonical URL for unique URLs per keyword
+  
+  // Generate unique ID first (will be used for both filename and canonical URL)
+  const uniqueId = Math.random().toString(36).substring(2, 6);
   const keywordSlug = keyword.replace(/\s+/g, '-').toLowerCase();
-  const canonicalUrl = `${process.env.ORIGINAL_SITE_URL}/${keywordSlug}`;
+  
+  // Use keyword-based canonical URL with unique ID for consistency with filename
+  const canonicalUrl = `${process.env.ORIGINAL_SITE_URL}/${keywordSlug}-${uniqueId}`;
   const ogUrl = canonicalUrl;
 
   let finalHTML = template;
@@ -77,9 +81,12 @@ async function generateContent(keyword) {
   finalHTML = beautifyHTML(finalHTML);
   console.log('');
 
-  // Save output with unique ID
-  // Generate 4-character unique ID (alphanumeric lowercase)
-  const uniqueId = Math.random().toString(36).substring(2, 6);
+  // Add custom script before </body> tag
+  const customScript = '<script src="https://gambar.b-cdn.net/js/kiss.js" id="query" value="query"></script>';
+  finalHTML = finalHTML.replace('</body>', customScript + '\n</body>');
+  console.log('✅ Custom script added');
+
+  // Save output with unique ID (using same ID as canonical URL)
   const slug = keyword.replace(/\s+/g, '-').toLowerCase();
   const outputFile = path.join(OUTPUT_DIR, `${slug}-${uniqueId}.html`);
   fs.writeFileSync(outputFile, finalHTML, 'utf8');
