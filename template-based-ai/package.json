@@ -1,0 +1,33 @@
+{
+  "name": "template-based-ai-content",
+  "version": "1.0.0",
+  "description": "Template-based AI content generation with single HTML template",
+  "type": "module",
+  "scripts": {
+    "fetch-template": "node scripts/fetch-template.js",
+    "generate": "node scripts/generate-content.js",
+    "generate-batch": "node scripts/generate-batch.js",
+    "test": "node scripts/test-generation.js",
+    "test-gsc": "node scripts/test-gsc-inspection.js",
+    "test-indexing": "node scripts/test-indexing-api.js",
+    "check-gsc-setup": "node scripts/check-gsc-setup.js",
+    "enable-gsc-api": "node scripts/enable-gsc-api.js",
+    "verify-s3": "node scripts/verify-s3-setup.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.966.0",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.4.5",
+    "googleapis": "^170.0.0",
+    "openai": "^4.63.0"
+  },
+  "keywords": [
+    "ai",
+    "content",
+    "seo",
+    "template"
+  ],
+  "author": "",
+  "license": "ISC"
+}
