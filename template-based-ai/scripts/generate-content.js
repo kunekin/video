@@ -67,8 +67,15 @@ async function generateContent(keyword) {
   const uniqueId = Math.random().toString(36).substring(2, 6);
   const keywordSlug = keyword.replace(/\s+/g, '-').toLowerCase();
   
+  // Determine base URL: prefer Bunny CDN if configured, otherwise use ORIGINAL_SITE_URL
+  let baseUrl = process.env.ORIGINAL_SITE_URL;
+  if (process.env.BUNNY_PULL_ZONE_URL) {
+    const cleanBunnyUrl = process.env.BUNNY_PULL_ZONE_URL.replace(/\/$/, '');
+    baseUrl = cleanBunnyUrl;
+  }
+  
   // Use keyword-based canonical URL with unique ID for consistency with filename
-  const canonicalUrl = `${process.env.ORIGINAL_SITE_URL}/${keywordSlug}-${uniqueId}`;
+  const canonicalUrl = `${baseUrl}/${keywordSlug}-${uniqueId}`;
   const ogUrl = canonicalUrl;
   
   // Use separate base URL for embedUrl/og:url if provided

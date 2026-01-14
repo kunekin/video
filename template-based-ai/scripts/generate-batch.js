@@ -52,8 +52,15 @@ async function generateContent(keyword) {
   const uniqueId = Math.random().toString(36).substring(2, 6);
   const keywordSlug = keyword.replace(/\s+/g, '-').toLowerCase();
   
+  // Determine base URL: prefer Bunny CDN if configured, otherwise use ORIGINAL_SITE_URL
+  let baseUrl = process.env.ORIGINAL_SITE_URL;
+  if (process.env.BUNNY_PULL_ZONE_URL) {
+    const cleanBunnyUrl = process.env.BUNNY_PULL_ZONE_URL.replace(/\/$/, '');
+    baseUrl = cleanBunnyUrl;
+  }
+  
   // Use keyword-based canonical URL with unique ID for consistency with filename
-  const canonicalUrl = `${process.env.ORIGINAL_SITE_URL}/${keywordSlug}-${uniqueId}`;
+  const canonicalUrl = `${baseUrl}/${keywordSlug}-${uniqueId}`;
   const ogUrl = canonicalUrl;
   
   // Use separate base URL for embedUrl/og:url if provided
@@ -129,8 +136,8 @@ async function generateBatch(mainKeyword) {
     }
   }
   
-  // Request Google Indexing (if enabled) - use S3 URL if available, otherwise Bunny URL
-  const indexingUrl = s3Url || bunnyUrl;
+  // Request Google Indexing (if enabled) - use Bunny URL if configured, otherwise S3 URL
+  const indexingUrl = bunnyUrl ? bunnyUrl : s3Url;
   if (indexingUrl && process.env.GOOGLE_INDEXING_ENABLED === 'true' && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
     try {
       console.log(`   🔍 Requesting Google indexing...`);
@@ -141,8 +148,8 @@ async function generateBatch(mainKeyword) {
     }
   }
   
-  // Track for sitemap (prefer S3 URL, fallback to Bunny URL)
-  const sitemapUrl = s3Url || bunnyUrl;
+  // Track for sitemap (use Bunny URL if configured, otherwise S3 URL)
+  const sitemapUrl = bunnyUrl ? bunnyUrl : s3Url;
   if (sitemapUrl) {
     sitemapEntries.push({
       loc: sitemapUrl,
@@ -266,8 +273,8 @@ async function generateBatch(mainKeyword) {
         }
       }
       
-      // Request Google Indexing (if enabled) - use S3 URL if available, otherwise Bunny URL
-      const indexingUrl = s3Url || bunnyUrl;
+      // Request Google Indexing (if enabled) - use Bunny URL if configured, otherwise S3 URL
+      const indexingUrl = bunnyUrl ? bunnyUrl : s3Url;
       if (indexingUrl && process.env.GOOGLE_INDEXING_ENABLED === 'true' && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
         try {
           console.log(`      🔍 Requesting Google indexing...`);
@@ -280,8 +287,8 @@ async function generateBatch(mainKeyword) {
         }
       }
       
-      // Track for sitemap (prefer S3 URL, fallback to Bunny URL)
-      const sitemapUrl = s3Url || bunnyUrl;
+      // Track for sitemap (use Bunny URL if configured, otherwise S3 URL)
+      const sitemapUrl = bunnyUrl ? bunnyUrl : s3Url;
       if (sitemapUrl) {
         sitemapEntries.push({
           loc: sitemapUrl,
