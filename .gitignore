@@ -5,6 +5,10 @@ lid.176.bin
 .env
 .env.local
 .env.*.local
+.env.backup
+.env.bak
+*.env
+!*.env.example
 
 # macOS
 .DS_Store
